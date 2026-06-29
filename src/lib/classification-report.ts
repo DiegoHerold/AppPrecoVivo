@@ -1,3 +1,4 @@
+import type { PlanoContaTipo } from '@/generated/prisma/client'
 import { prisma } from '@/lib/prisma'
 import {
   calculateEstimatedConsumption,
@@ -11,11 +12,12 @@ import { loadFlowItems, recalculateMonthlyFlow } from '@/lib/monthly-flow'
 type PlanRow = {
   id: string
   parentId: string | null
-  name: string
-  icon: string
-  color: string
+  tipo: PlanoContaTipo
+  nome: string
+  icone: string
+  cor: string
   allowedUnits: string[]
-  active: boolean
+  ativo: boolean
   createdAt: Date
 }
 
@@ -61,8 +63,8 @@ function pathTo(row: PlanRow, byId: Map<string, PlanRow>) {
   return path
 }
 
-function scoped(items: FlowItem[], categoryIds: Set<string>) {
-  return items.filter((item) => Boolean(item.categoryId && categoryIds.has(item.categoryId)))
+function scoped(items: FlowItem[], nodeIds: Set<string>) {
+  return items.filter((item) => Boolean(item.nodeId && nodeIds.has(item.nodeId)))
 }
 
 function spent(items: FlowItem[]) {
@@ -76,12 +78,16 @@ function consumed(items: FlowItem[]) {
 export async function getClassificationDashboard(userId: string, year: number, month: number, categoryId?: string | null) {
   const previous = previousMonth(year, month)
   await recalculateMonthlyFlow(userId, year, month)
-  const [currentItems, previousItems, categoryRows] = await Promise.all([
+  const [currentItems, previousItems, planRows] = await Promise.all([
     loadFlowItems(userId, year, month),
     loadFlowItems(userId, previous.year, previous.month),
-    prisma.category.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    prisma.planoConta.findMany({
+      where: { userId },
+      select: { id: true, parentId: true, tipo: true, nome: true, icone: true, cor: true, allowedUnits: true, ativo: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    }),
   ])
-  const rows: PlanRow[] = categoryRows
+  const rows = planRows as PlanRow[]
   const byId = new Map(rows.map((row) => [row.id, row]))
   const selected = categoryId ? byId.get(categoryId) : undefined
   if (categoryId && !selected) throw new Error('Classificação não encontrada.')
@@ -91,28 +97,30 @@ export async function getClassificationDashboard(userId: string, year: number, m
   const flow = calculateMonthlyFlow(current, before)
   const outOfPattern = detectOutOfPatternProducts(current, before)
 
-  const categories = rows.map((category) => {
-    const ids = descendants(rows, category.id)
-    const categoryItems = scoped(currentItems, ids)
+  // Apenas os nós GRUPO compõem a navegação de classificação; produtos são folhas.
+  const groups = rows.filter((row) => row.tipo === 'GRUPO')
+  const categories = groups.map((group) => {
+    const ids = descendants(rows, group.id)
+    const groupItems = scoped(currentItems, ids)
     const priorItems = scoped(previousItems, ids)
-    const total = spent(categoryItems)
-    const consumption = consumed(categoryItems)
-    const path = pathTo(category, byId)
+    const total = spent(groupItems)
+    const consumption = consumed(groupItems)
+    const path = pathTo(group, byId)
     return {
-      id: category.id,
-      parentId: category.parentId,
-      name: category.name,
-      icon: category.icon,
-      color: category.color,
-      allowedUnits: category.allowedUnits,
-      active: category.active,
+      id: group.id,
+      parentId: group.parentId,
+      name: group.nome,
+      icon: group.icone,
+      color: group.cor,
+      allowedUnits: group.allowedUnits,
+      active: group.ativo,
       level: path.length - 1,
-      path: path.map((item) => item.name),
+      path: path.map((item) => item.nome),
       totalSpent: round(total),
       estimatedConsumption: round(consumption),
       stockAmount: round(total - consumption),
       variation: round(total - spent(priorItems)),
-      productCount: new Set(categoryItems.map((item) => item.key)).size,
+      productCount: new Set(groupItems.map((item) => item.key)).size,
     }
   }).sort((a, b) => a.path.join(' / ').localeCompare(b.path.join(' / '), 'pt-BR'))
   const categoryById = new Map(categories.map((category) => [category.id, category]))
@@ -130,11 +138,11 @@ export async function getClassificationDashboard(userId: string, year: number, m
     }
   })
 
-  const groups = new Map<string, { name: string; amount: number; prices: number[]; unit: string; purchases: Set<string> }>()
-  const hasChildren = rows.some((row) => row.parentId === (selected?.id ?? null))
-  const productItems = hasChildren ? selected ? current.filter((item) => item.categoryId === selected.id) : [] : current
+  // Produtos exibidos: itens cujo grupo é exatamente o selecionado (produtos diretos do nível).
+  const productGroups = new Map<string, { name: string; amount: number; prices: number[]; unit: string; purchases: Set<string> }>()
+  const productItems = selected ? current.filter((item) => item.groupId === selected.id) : []
   for (const item of productItems) {
-    const group = groups.get(item.key) ?? {
+    const group = productGroups.get(item.key) ?? {
       name: item.name,
       amount: 0,
       prices: [],
@@ -144,7 +152,7 @@ export async function getClassificationDashboard(userId: string, year: number, m
     group.amount += item.totalPrice
     group.prices.push(item.unitPrice)
     if (item.purchaseId) group.purchases.add(item.purchaseId)
-    groups.set(item.key, group)
+    productGroups.set(item.key, group)
   }
 
   const insights: { id: string; type: string; title: string; description: string; amount: number }[] = explainMonthlyDifference(current, before)
@@ -191,9 +199,9 @@ export async function getClassificationDashboard(userId: string, year: number, m
     outOfPattern: outOfPattern.map((item) => ({ name: item.name, amount: item.totalPrice, behaviorType: item.behaviorType })),
     classification: {
       selected: selected ? categoryById.get(selected.id) ?? null : null,
-      breadcrumbs: selected ? pathTo(selected, byId).map((row) => ({ id: row.id, name: row.name, icon: row.icon, color: row.color })) : [],
+      breadcrumbs: selected ? pathTo(selected, byId).map((row) => ({ id: row.id, name: row.nome, icon: row.icone, color: row.cor })) : [],
       children,
-      products: Array.from(groups.entries()).map(([id, group]) => ({
+      products: Array.from(productGroups.entries()).map(([id, group]) => ({
         id,
         name: group.name,
         amount: round(group.amount),

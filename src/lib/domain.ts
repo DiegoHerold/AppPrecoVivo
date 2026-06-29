@@ -10,14 +10,16 @@ export type FlowItem = {
   totalPrice: number
   behaviorType: BehaviorType
   estimatedDurationMonths: number
-  categoryId?: string
-  categoryName?: string
+  // nodeId é o nó PRODUTO do plano de contas ao qual o item pertence.
+  // groupId é o grupo (parentId) desse nó — derivado da árvore, fonte única de classificação.
+  nodeId?: string
+  groupId?: string | null
 }
 
 export function normalizeProductName(value: string) {
   return value
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/\b(tipo|unidade|un|pct|pacote)\b/g, ' ')
     .replace(/[^a-z0-9]+/g, ' ')

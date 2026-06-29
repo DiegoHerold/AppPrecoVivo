@@ -1,6 +1,6 @@
 import { hash } from 'bcryptjs'
 import { createSession, getPublicUserById } from '@/lib/auth'
-import { createInitialCategories } from '@/lib/categories'
+import { createInitialPlanoContas } from '@/lib/plano-contas-seed'
 import { errorResponse } from '@/lib/http'
 import { prisma } from '@/lib/prisma'
 import { registerSchema } from '@/lib/validation'
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
         data: { name: input.name, email: input.email, passwordHash, settings: { create: {} } },
         select: { id: true },
       })
-      await createInitialCategories(tx, created.id)
+      await createInitialPlanoContas(tx, created.id)
       return created
     })
     await createSession(user.id)

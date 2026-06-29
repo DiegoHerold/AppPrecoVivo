@@ -30,14 +30,13 @@ export async function loadFlowItems(userId: string, year: number, month: number)
     },
     include: {
       product: { select: { standardName: true } },
-      productAccount: { select: { id: true, name: true } },
-      category: { select: { name: true } },
+      planoConta: { select: { id: true, nome: true, parentId: true } },
     },
   })
 
   return rows.map((item) => ({
-    key: item.productAccountId ?? item.productId ?? item.normalizedName,
-    name: item.productAccount?.name ?? item.product?.standardName ?? item.rawName,
+    key: item.planoContaId,
+    name: item.planoConta.nome ?? item.product.standardName ?? item.rawName,
     purchaseId: item.purchaseId,
     quantity: number(item.quantity),
     unit: item.unit,
@@ -45,8 +44,8 @@ export async function loadFlowItems(userId: string, year: number, month: number)
     totalPrice: number(item.totalPrice),
     behaviorType: item.behaviorType,
     estimatedDurationMonths: number(item.estimatedDurationMonths),
-    categoryId: item.categoryId,
-    categoryName: item.category.name,
+    nodeId: item.planoContaId,
+    groupId: item.planoConta.parentId,
   }))
 }
 

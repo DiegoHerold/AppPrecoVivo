@@ -17,15 +17,12 @@ export type CategoryDto = {
   allowedUnits: MeasureUnit[]
   totalSpent: number; estimatedConsumption: number; stockAmount: number; variation: number; productCount: number
 }
-export type AccountPlanCategoryDto = {
-  id: string; parentId: string | null; name: string; icon: string; color: string; active: boolean; level: number; path: string[]
-  allowedUnits: MeasureUnit[]
-  childrenCount: number; productCount: number; itemCount: number
-  accounts: ProductAccountDto[]
-}
-export type ProductAccountDto = {
-  id: string; productId: string; name: string; type: 'PRODUTO'; categoryId: string; active: boolean; createdAt: string
-  itemCount: number; defaultUnit: string; behaviorType: BehaviorType; productActive: boolean
+export type PlanoContaNode = {
+  id: string; nome: string; tipo: 'GRUPO' | 'PRODUTO'; parentId: string | null; produtoId: string | null
+  ativo: boolean; ordem: number; icone: string; cor: string; allowedUnits: MeasureUnit[]
+  level: number; path: string[]; childrenCount: number; productCount: number; itemCount: number
+  defaultUnit?: MeasureUnit; brand?: string | null; packageSize?: string | null
+  behaviorType?: BehaviorType; estimatedDurationMonths?: number; productActive?: boolean
 }
 export type InsightDto = { id: string; type: string; title: string; description: string; amount: number }
 export type DashboardDto = {

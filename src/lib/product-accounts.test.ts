@@ -1,71 +1,40 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { Prisma } from '@/generated/prisma/client'
-import { createProductWithAccount } from './product-accounts'
+import { descendantIds, indexTree, pathOf, wouldCreateCycle, type TreeRow } from './plano-contas-tree'
 
-const input = {
-  standardName: 'Arroz Integral 1kg',
-  categoryId: 'categoria-arroz',
-  behaviorType: 'estoque' as const,
-  estimatedDurationMonths: 2,
-  defaultUnit: 'kg',
-  classificationConfirmed: true,
-}
+// Árvore de exemplo:
+// Alimentação > Carnes > Aves > (Frango[GRUPO], frango-prod[PRODUTO])
+const rows: TreeRow[] = [
+  { id: 'alim', parentId: null, tipo: 'GRUPO', nome: 'Alimentação' },
+  { id: 'carnes', parentId: 'alim', tipo: 'GRUPO', nome: 'Carnes' },
+  { id: 'aves', parentId: 'carnes', tipo: 'GRUPO', nome: 'Aves' },
+  { id: 'frango', parentId: 'aves', tipo: 'GRUPO', nome: 'Frango' },
+  { id: 'prod-frango', parentId: 'frango', tipo: 'PRODUTO', nome: 'Peito de frango 1kg' },
+  { id: 'casa', parentId: null, tipo: 'GRUPO', nome: 'Casa' },
+]
 
-test('cria a conta de produto com os mesmos dados dentro da transação recebida', async () => {
-  const calls: Array<{ entity: string; data: Record<string, unknown> }> = []
-  const product = {
-    id: 'produto-1',
-    userId: 'usuario-1',
-    standardName: input.standardName,
-    categoryId: input.categoryId,
-    active: true,
-  }
-  const tx = {
-    product: {
-      create: async ({ data }: { data: Record<string, unknown> }) => {
-        calls.push({ entity: 'product', data })
-        return product
-      },
-    },
-    productAccount: {
-      create: async ({ data }: { data: Record<string, unknown> }) => {
-        calls.push({ entity: 'account', data })
-        return { id: 'conta-1', ...data }
-      },
-    },
-  } as unknown as Prisma.TransactionClient
-
-  const result = await createProductWithAccount(tx, product.userId, input)
-
-  assert.equal(result.product.id, product.id)
-  assert.equal(result.account.id, 'conta-1')
-  assert.deepEqual(calls.map((call) => call.entity), ['product', 'account'])
-  assert.deepEqual(calls[1].data, {
-    userId: product.userId,
-    productId: product.id,
-    name: product.standardName,
-    type: 'PRODUTO',
-    categoryId: product.categoryId,
-    active: true,
-  })
+test('descendantIds inclui o nó e toda a subárvore (grupos e produtos)', () => {
+  const ids = descendantIds(rows, 'carnes')
+  assert.deepEqual([...ids].sort(), ['aves', 'carnes', 'frango', 'prod-frango'])
+  assert.equal(descendantIds(rows, 'casa').size, 1)
 })
 
-test('propaga a falha da conta para que a transação reverta o produto', async () => {
-  const tx = {
-    product: {
-      create: async () => ({
-        id: 'produto-2',
-        userId: 'usuario-1',
-        standardName: input.standardName,
-        categoryId: input.categoryId,
-        active: true,
-      }),
-    },
-    productAccount: {
-      create: async () => { throw new Error('falha ao criar conta') },
-    },
-  } as unknown as Prisma.TransactionClient
+test('pathOf monta a hierarquia até a raiz', () => {
+  const { byId } = indexTree(rows)
+  const path = pathOf(byId.get('prod-frango')!, byId).map((row) => row.nome)
+  assert.deepEqual(path, ['Alimentação', 'Carnes', 'Aves', 'Frango', 'Peito de frango 1kg'])
+})
 
-  await assert.rejects(() => createProductWithAccount(tx, 'usuario-1', input), /falha ao criar conta/)
+test('wouldCreateCycle bloqueia mover um nó para dentro de si mesmo ou de um descendente', () => {
+  const { byId } = indexTree(rows)
+  assert.equal(wouldCreateCycle(byId, 'carnes', 'aves'), true) // mover Carnes para baixo de Aves (descendente)
+  assert.equal(wouldCreateCycle(byId, 'carnes', 'carnes'), true) // para si mesmo
+  assert.equal(wouldCreateCycle(byId, 'carnes', 'casa'), false) // destino válido
+  assert.equal(wouldCreateCycle(byId, 'carnes', null), false) // para a raiz
+})
+
+test('indexTree agrupa filhos por pai', () => {
+  const { childrenByParent } = indexTree(rows)
+  assert.deepEqual((childrenByParent.get(null) ?? []).map((row) => row.id).sort(), ['alim', 'casa'])
+  assert.deepEqual((childrenByParent.get('aves') ?? []).map((row) => row.id), ['frango'])
 })

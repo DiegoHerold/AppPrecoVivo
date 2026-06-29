@@ -2,7 +2,7 @@ import 'dotenv/config'
 import { hash } from 'bcryptjs'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../src/generated/prisma/client'
-import { createInitialCategories, INITIAL_CATEGORIES } from '../src/lib/categories'
+import { createInitialPlanoContas, INITIAL_GROUPS } from '../src/lib/plano-contas-seed'
 
 const connectionString = process.env.DATABASE_URL
 if (!connectionString) throw new Error('DATABASE_URL não configurada.')
@@ -22,8 +22,8 @@ async function main() {
     update: {},
     create: { userId: user.id },
   })
-  await prisma.$transaction((tx) => createInitialCategories(tx, user.id))
-  console.log(`Seed estrutural concluído para ${email}: ${INITIAL_CATEGORIES.length} categorias, nenhuma compra.`)
+  await prisma.$transaction((tx) => createInitialPlanoContas(tx, user.id))
+  console.log(`Seed estrutural concluído para ${email}: ${INITIAL_GROUPS.length} grupos no plano de contas, nenhuma compra.`)
 }
 
 main().finally(() => prisma.$disconnect())

@@ -14,12 +14,12 @@ export class ProductUpdateError extends Error {
 }
 
 export async function updateProduct(userId: string, productId: string, input: ProductUpdateInput) {
-  const [product, category, duplicate] = await Promise.all([
+  const [product, group, duplicate] = await Promise.all([
     prisma.product.findFirst({
       where: { id: productId, userId, active: true },
-      include: { account: true, items: { include: { purchase: { select: { purchaseDate: true } } } } },
+      include: { node: true, items: { include: { purchase: { select: { purchaseDate: true } } } } },
     }),
-    prisma.category.findFirst({ where: { id: input.categoryId, userId, active: true } }),
+    prisma.planoConta.findFirst({ where: { id: input.categoryId, userId, tipo: 'GRUPO', ativo: true } }),
     prisma.product.findFirst({
       where: { userId, id: { not: productId }, standardName: { equals: input.standardName, mode: 'insensitive' } },
       select: { id: true },
@@ -27,12 +27,11 @@ export async function updateProduct(userId: string, productId: string, input: Pr
   ])
 
   if (!product) throw new ProductUpdateError('Produto não encontrado.', 404)
-  if (!product.account) throw new ProductUpdateError('Produto sem conta correspondente no plano de contas.', 409)
-  const productAccount = product.account
-  if (!category) throw new ProductUpdateError('Classificação não encontrada ou desativada.', 404)
+  if (!product.node) throw new ProductUpdateError('Produto sem nó correspondente no plano de contas.', 409)
+  if (!group) throw new ProductUpdateError('Grupo não encontrado ou desativado.', 404)
   if (duplicate) throw new ProductUpdateError('Já existe outro produto com esse nome.', 409)
-  if (!category.allowedUnits.includes(input.defaultUnit)) {
-    throw new ProductUpdateError('A unidade escolhida não está habilitada nessa classificação.')
+  if (!group.allowedUnits.includes(input.defaultUnit)) {
+    throw new ProductUpdateError('A unidade escolhida não está habilitada nesse grupo.')
   }
 
   await prisma.$transaction(async (tx) => {
@@ -41,7 +40,6 @@ export async function updateProduct(userId: string, productId: string, input: Pr
       data: {
         standardName: input.standardName,
         brand: input.brand || null,
-        categoryId: input.categoryId,
         behaviorType: input.behaviorType,
         estimatedDurationMonths: input.estimatedDurationMonths,
         defaultUnit: input.defaultUnit,
@@ -49,20 +47,15 @@ export async function updateProduct(userId: string, productId: string, input: Pr
         classificationConfirmed: true,
       },
     })
-    await tx.productAccount.update({
-      where: { productId },
-      data: {
-        name: input.standardName,
-        categoryId: input.categoryId,
-        active: true,
-      },
+    // Renomeia e move o nó PRODUTO para o grupo escolhido (o histórico segue ligado ao mesmo nó).
+    await tx.planoConta.update({
+      where: { id: product.node!.id },
+      data: { nome: input.standardName, parentId: input.categoryId, ativo: true },
     })
     if (input.applyToHistory) {
       await tx.purchaseItem.updateMany({
         where: { productId, purchase: { userId } },
         data: {
-          productAccountId: productAccount.id,
-          categoryId: input.categoryId,
           behaviorType: input.behaviorType,
           estimatedDurationMonths: input.estimatedDurationMonths,
           matchConfidence: 1,
@@ -87,15 +80,15 @@ export async function updateProduct(userId: string, productId: string, input: Pr
 export async function deactivateProduct(userId: string, productId: string) {
   const product = await prisma.product.findFirst({
     where: { id: productId, userId, active: true },
-    include: { account: true },
+    include: { node: true },
   })
   if (!product) throw new ProductUpdateError('Produto não encontrado.', 404)
-  if (!product.account) throw new ProductUpdateError('Produto sem conta correspondente no plano de contas.', 409)
+  if (!product.node) throw new ProductUpdateError('Produto sem nó correspondente no plano de contas.', 409)
 
   await prisma.$transaction(async (tx) => {
     await tx.product.update({ where: { id: productId }, data: { active: false } })
-    await tx.productAccount.update({ where: { productId }, data: { active: false } })
+    await tx.planoConta.update({ where: { id: product.node!.id }, data: { ativo: false } })
   })
 
-  return { id: productId, active: false, accountId: product.account.id, accountActive: false }
+  return { id: productId, active: false, accountId: product.node.id, accountActive: false }
 }

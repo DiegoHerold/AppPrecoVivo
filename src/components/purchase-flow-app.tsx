@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { clientApi } from '@/lib/client-api'
-import type { AccountPlanCategoryDto, AppScreen, CategoryDto, DashboardDto, ProductDetailDto, ProductDto, PurchaseDto, ReviewDto, UserDto } from '@/lib/client-types'
+import type { AppScreen, CategoryDto, DashboardDto, PlanoContaNode, ProductDetailDto, ProductDto, PurchaseDto, ReviewDto, UserDto } from '@/lib/client-types'
 import { AuthScreen } from './auth-screen'
 import { AddNoteScreen } from './add-note-screen'
 import { BottomNav, ErrorState, LoadingState } from './ui'
 import { HomeScreen } from './home-screen'
 import { FlowScreen } from './flow-screen'
 import { ProductsScreen } from './products-screen'
-import { CategoriesScreen } from './categories-screen'
+import { PlanoContasScreen } from './plano-contas-screen'
 import { ProductDetailScreen } from './product-detail-screen'
 import { ManualPurchaseScreen } from './manual-purchase-screen'
 import { TextPurchaseScreen } from './text-purchase-screen'
@@ -24,7 +24,7 @@ async function fetchAppData(period: { year: number; month: number }) {
   const query = `?year=${period.year}&month=${period.month}`
   const [dashboard, accountPlan, products, reviews] = await Promise.all([
     clientApi<DashboardDto>(`/api/dashboard${query}`),
-    clientApi<AccountPlanCategoryDto[]>('/api/account-plan'),
+    clientApi<PlanoContaNode[]>('/api/plano-contas'),
     clientApi<ProductDto[]>('/api/products'),
     clientApi<ReviewDto[]>('/api/reviews'),
   ])
@@ -40,7 +40,7 @@ export function PurchaseFlowApp() {
   const [period, setPeriod] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 })
   const [dashboard, setDashboard] = useState<DashboardDto | null>(null)
   const [categories, setCategories] = useState<CategoryDto[]>([])
-  const [accountPlan, setAccountPlan] = useState<AccountPlanCategoryDto[]>([])
+  const [accountPlan, setAccountPlan] = useState<PlanoContaNode[]>([])
   const [products, setProducts] = useState<ProductDto[]>([])
   const [reviews, setReviews] = useState<ReviewDto[]>([])
   const [product, setProduct] = useState<ProductDetailDto | null>(null)
@@ -124,7 +124,7 @@ export function PurchaseFlowApp() {
       {screen === 'profile' && <ProfileScreen user={user} onBack={goBack} updated={setUser} logout={() => void logout()} />}
       {screen === 'flow' && dashboard && <FlowScreen data={filteredFlow ?? dashboard} changeMonth={changeMonth} selectCategory={(id) => void selectFlowCategory(id)} loading={flowLoading} />}
       {screen === 'products' && <ProductsScreen products={products} openProduct={(id) => void openProduct(id)} openCategories={() => navigate('categories')} />}
-      {screen === 'categories' && <CategoriesScreen categories={accountPlan} onBack={goBack} changed={reloadAll} openProduct={(id) => void openProduct(id)} />}
+      {screen === 'categories' && <PlanoContasScreen nodes={accountPlan} onBack={goBack} changed={reloadAll} openProduct={(id) => void openProduct(id)} />}
       {screen === 'product' && (product ? <ProductDetailScreen product={product} categories={selectableCategories} onBack={goBack} updated={async (next) => { setProduct(next); await reloadAll() }} removed={async () => { setProduct(null); await reloadAll(); goBack() }} /> : <LoadingState label="Carregando histórico…" />)}
       {screen === 'add' && <AddNoteScreen navigate={navigate} onBack={goBack} cameraFacingMode={user.settings.cameraFacingMode} created={purchaseCreated} />}
       {screen === 'manual' && <ManualPurchaseScreen categories={selectableCategories} onBack={goBack} created={purchaseCreated} />}

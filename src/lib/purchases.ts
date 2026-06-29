@@ -5,7 +5,7 @@ import { classificationSimilarity, estimateProductDuration, normalizeProductName
 import { accessKeyFrom, importerFor, ManualTextImporter } from '@/lib/importers'
 import { manualPurchaseSchema, pendingImportSchema, rawTextImportSchema } from '@/lib/validation'
 import { recalculatePurchaseMonth } from '@/lib/monthly-flow'
-import { createProductWithAccount } from '@/lib/product-accounts'
+import { createProdutoWithNode } from '@/lib/plano-contas'
 
 type Tx = Prisma.TransactionClient
 
@@ -13,16 +13,16 @@ export async function matchProductByAlias(tx: Tx, userId: string, rawName: strin
   const normalized = normalizeProductName(rawName)
   const exact = await tx.productAlias.findFirst({
     where: { normalizedAliasName: normalized, product: { userId, active: true } },
-    include: { product: { include: { account: true } } },
+    include: { product: { include: { node: true } } },
   })
   if (exact) {
-    if (!exact.product.account) throw new Error('Produto sem conta correspondente no plano de contas.')
-    return { product: exact.product, account: exact.product.account, confidence: 0.99 }
+    if (!exact.product.node) throw new Error('Produto sem nó correspondente no plano de contas.')
+    return { product: exact.product, node: exact.product.node, confidence: 0.99 }
   }
 
   const products = await tx.product.findMany({
     where: { userId, active: true },
-    include: { account: true, aliases: { select: { aliasName: true } } },
+    include: { node: true, aliases: { select: { aliasName: true } } },
   })
   let best: (typeof products)[number] | null = null
   let confidence = 0
@@ -35,21 +35,20 @@ export async function matchProductByAlias(tx: Tx, userId: string, rawName: strin
     if (score > confidence) { best = product; confidence = score }
   }
   if (!best || confidence < 0.78) return null
-  if (!best.account) throw new Error('Produto sem conta correspondente no plano de contas.')
-  return { product: best, account: best.account, confidence }
+  if (!best.node) throw new Error('Produto sem nó correspondente no plano de contas.')
+  return { product: best, node: best.node, confidence }
 }
 
-async function learnedCategoryFor(tx: Tx, userId: string, rawName: string) {
+async function learnedGroupFor(tx: Tx, userId: string, rawName: string) {
   const products = await tx.product.findMany({
     where: { userId, active: true, classificationConfirmed: true },
-    include: { aliases: { select: { aliasName: true } } },
+    include: { node: { select: { parentId: true } }, aliases: { select: { aliasName: true } } },
   })
-  const learned = suggestLearnedCategory(rawName, products.map((product) => ({
-    categoryId: product.categoryId,
-    names: [product.standardName, ...product.aliases.map((alias) => alias.aliasName)],
-  })))
+  const learned = suggestLearnedCategory(rawName, products.flatMap((product) => (product.node?.parentId
+    ? [{ categoryId: product.node.parentId, names: [product.standardName, ...product.aliases.map((alias) => alias.aliasName)] }]
+    : [])))
   if (!learned) return null
-  return { categoryId: learned.categoryId, confidence: Math.min(0.94, Math.round((0.68 + learned.score * 0.28) * 100) / 100) }
+  return { groupId: learned.categoryId, confidence: Math.min(0.94, Math.round((0.68 + learned.score * 0.28) * 100) / 100) }
 }
 
 type ManualInput = ReturnType<typeof manualPurchaseSchema.parse>
@@ -63,12 +62,13 @@ type PurchaseSource = {
 async function persistManualPurchase(userId: string, input: ManualInput, source: PurchaseSource = { inputType: 'manual' }) {
   const purchaseDate = new Date(`${input.purchaseDate}T12:00:00.000Z`)
   const purchase = await prisma.$transaction(async (tx) => {
-    const categories = await tx.category.findMany({
-      where: { userId, id: { in: input.items.map((item) => item.categoryId) }, active: true },
+    const groupIds = input.items.map((item) => item.categoryId)
+    const groups = await tx.planoConta.findMany({
+      where: { userId, tipo: 'GRUPO', ativo: true, id: { in: groupIds } },
       select: { id: true },
     })
-    if (new Set(categories.map((category) => category.id)).size !== new Set(input.items.map((item) => item.categoryId)).size) {
-      throw new Error('Uma das categorias não pertence à sua conta.')
+    if (new Set(groups.map((group) => group.id)).size !== new Set(groupIds).size) {
+      throw new Error('Um dos grupos não pertence à sua conta.')
     }
 
     const store = await tx.store.create({
@@ -88,8 +88,7 @@ async function persistManualPurchase(userId: string, input: ManualInput, source:
         resolvedItems.push({
           ...item,
           productId: match.product.id,
-          productAccountId: match.account.id,
-          categoryId: match.product.categoryId,
+          planoContaId: match.node.id,
           behaviorType: match.product.behaviorType,
           estimatedDurationMonths: Number(match.product.estimatedDurationMonths),
           confidence: match.confidence,
@@ -98,19 +97,19 @@ async function persistManualPurchase(userId: string, input: ManualInput, source:
         continue
       }
 
-      const learned = await learnedCategoryFor(tx, userId, item.rawName)
+      const learned = await learnedGroupFor(tx, userId, item.rawName)
       const manuallyClassified = source.inputType === 'manual'
       const confidence = manuallyClassified ? 1 : learned?.confidence ?? 0.45
-      const { product, account } = await createProductWithAccount(tx, userId, {
+      const { product, node } = await createProdutoWithNode(tx, userId, {
         standardName: item.rawName,
-        categoryId: learned?.categoryId ?? item.categoryId,
+        groupId: learned?.groupId ?? item.categoryId,
         behaviorType: item.behaviorType,
         estimatedDurationMonths: item.estimatedDurationMonths,
         defaultUnit: item.unit,
         classificationConfirmed: manuallyClassified,
         active: true,
       })
-      resolvedItems.push({ ...item, productId: product.id, productAccountId: account.id, categoryId: product.categoryId, confidence, needsReview: !manuallyClassified && confidence < 0.85 })
+      resolvedItems.push({ ...item, productId: product.id, planoContaId: node.id, confidence, needsReview: !manuallyClassified && confidence < 0.85 })
     }
 
     const created = await tx.purchase.create({
@@ -128,12 +127,11 @@ async function persistManualPurchase(userId: string, input: ManualInput, source:
             rawName: item.rawName,
             normalizedName: normalizeProductName(item.rawName),
             productId: item.productId,
-            productAccountId: item.productAccountId,
+            planoContaId: item.planoContaId,
             quantity: item.quantity,
             unit: item.unit,
             unitPrice: item.unitPrice,
             totalPrice: Math.round(item.quantity * item.unitPrice * 100) / 100,
-            categoryId: item.categoryId,
             behaviorType: item.behaviorType,
             estimatedDurationMonths: item.estimatedDurationMonths,
             matchConfidence: item.confidence,
@@ -157,40 +155,42 @@ export async function createManualPurchase(userId: string, unknownInput: unknown
   return persistManualPurchase(userId, manualPurchaseSchema.parse(unknownInput))
 }
 
-function suggestedCategoryName(rawName: string) {
+function suggestedGroupName(rawName: string) {
   const normalized = normalizeProductName(rawName)
   if (/pimentao|cebola|abobora|legume/.test(normalized)) return 'Legumes'
-  if (/macarrao|\bmacar\b|parafuso|espaguete/.test(normalized)) return 'Macarrão'
   if (/frango|sassami|filezin/.test(normalized)) return 'Aves'
-  if (/passata|molho de tomate/.test(normalized)) return 'Básicos'
+  if (/arroz|feijao|aveia|macarrao|\bmacar\b|espaguete/.test(normalized)) return 'Grãos e Cereais'
   if (/sabao|detergente|amaciante|limpador/.test(normalized)) return 'Limpeza'
-  if (/shampoo|sabonete|papel higienico|pap hig|desodorante/.test(normalized)) return 'Higiene pessoal'
+  if (/shampoo|sabonete|papel higienico|pap hig|desodorante|creme dental/.test(normalized)) return 'Higiene'
   if (/cafe|suco|agua|refrigerante/.test(normalized)) return 'Bebidas'
   if (/pao|bolo|biscoito/.test(normalized)) return 'Padaria'
-  if (/remedio|dipirona|paracetamol/.test(normalized)) return 'Farmácia'
-  if (/racao|petisco/.test(normalized)) return 'Pet'
+  if (/remedio|dipirona|paracetamol/.test(normalized)) return 'Medicamentos'
+  if (/leite|queijo|iogurte/.test(normalized)) return 'Laticínios'
   return 'Alimentação'
+}
+
+async function selectableGroups(userId: string) {
+  const groups = await prisma.planoConta.findMany({ where: { userId, tipo: 'GRUPO', ativo: true } })
+  const fallback = groups.find((group) => group.nome === 'Outros') ?? groups[0]
+  if (!fallback) throw new Error('Sua conta ainda não possui grupos no plano de contas.')
+  const resolve = (rawName: string) => (groups.find((group) => group.nome === suggestedGroupName(rawName)) ?? fallback).id
+  return { resolve }
 }
 
 export async function createPurchaseFromText(userId: string, unknownInput: unknown) {
   const input = rawTextImportSchema.parse(unknownInput)
   const result = await new ManualTextImporter().import(input.rawText)
   if (result.status !== 'concluida' || !result.items) throw new Error(result.message)
-  const categories = await prisma.category.findMany({ where: { userId, active: true } })
-  const fallback = categories.find((category) => category.name === 'Outros') ?? categories[0]
-  if (!fallback) throw new Error('Sua conta ainda não possui categorias.')
-  const items = result.items.map((item) => {
-    const category = categories.find((candidate) => candidate.name === suggestedCategoryName(item.rawName)) ?? fallback
-    return {
-      rawName: item.rawName,
-      quantity: item.quantity,
-      unit: item.unit,
-      unitPrice: item.unitPrice,
-      categoryId: category.id,
-      behaviorType: item.behaviorType,
-      estimatedDurationMonths: estimateProductDuration(item.behaviorType, item.rawName),
-    }
-  })
+  const { resolve } = await selectableGroups(userId)
+  const items = result.items.map((item) => ({
+    rawName: item.rawName,
+    quantity: item.quantity,
+    unit: item.unit,
+    unitPrice: item.unitPrice,
+    categoryId: resolve(item.rawName),
+    behaviorType: item.behaviorType,
+    estimatedDurationMonths: estimateProductDuration(item.behaviorType, item.rawName),
+  }))
   return persistManualPurchase(userId, {
     storeName: input.storeName,
     storeType: input.storeType,
@@ -236,17 +236,12 @@ export async function createPendingImport(userId: string, unknownInput: unknown)
     const existing = await findExisting(result.receipt.accessKey)
     if (existing) return duplicateResponse(existing, result.items.length)
 
-    const categories = await prisma.category.findMany({ where: { userId, active: true } })
-    const fallback = categories.find((category) => category.name === 'Outros') ?? categories[0]
-    if (!fallback) throw new Error('Sua conta ainda não possui classificações.')
-    const items = result.items.map((item) => {
-      const category = categories.find((candidate) => candidate.name === suggestedCategoryName(item.rawName)) ?? fallback
-      return {
-        ...item,
-        categoryId: category.id,
-        estimatedDurationMonths: estimateProductDuration(item.behaviorType, item.rawName),
-      }
-    })
+    const { resolve } = await selectableGroups(userId)
+    const items = result.items.map((item) => ({
+      ...item,
+      categoryId: resolve(item.rawName),
+      estimatedDurationMonths: estimateProductDuration(item.behaviorType, item.rawName),
+    }))
     try {
       const purchase = await persistManualPurchase(userId, {
         storeName: result.receipt.storeName,
@@ -307,25 +302,25 @@ export async function confirmReview(userId: string, itemId: string, input: {
   const result = await prisma.$transaction(async (tx) => {
     const item = await tx.purchaseItem.findFirst({
       where: { id: itemId, purchase: { userId } },
-      include: { product: { include: { account: true } }, purchase: { select: { id: true, purchaseDate: true } } },
+      include: { product: { include: { node: true } }, purchase: { select: { id: true, purchaseDate: true } } },
     })
-    if (!item || !item.productId) throw new Error('Item não encontrado.')
-    if (!item.product?.account) throw new Error('Produto sem conta correspondente no plano de contas.')
-    const category = await tx.category.findFirst({ where: { id: input.categoryId, userId, active: true } })
-    if (!category) throw new Error('Categoria inválida.')
+    if (!item) throw new Error('Item não encontrado.')
+    if (!item.product.node) throw new Error('Produto sem nó correspondente no plano de contas.')
+    const group = await tx.planoConta.findFirst({ where: { id: input.categoryId, userId, tipo: 'GRUPO', ativo: true } })
+    if (!group) throw new Error('Grupo inválido.')
     await tx.product.update({
       where: { id: item.productId },
       data: {
         standardName: input.standardName,
-        categoryId: input.categoryId,
         behaviorType: input.behaviorType,
         estimatedDurationMonths: input.estimatedDurationMonths,
         classificationConfirmed: true,
       },
     })
-    await tx.productAccount.update({
-      where: { productId: item.productId },
-      data: { name: input.standardName, categoryId: input.categoryId, active: true },
+    // Renomeia e move o nó PRODUTO para o grupo escolhido (mantém o mesmo planoContaId no histórico).
+    await tx.planoConta.update({
+      where: { id: item.product.node.id },
+      data: { nome: input.standardName, parentId: input.categoryId },
     })
     await tx.productAlias.upsert({
       where: { productId_normalizedAliasName: { productId: item.productId, normalizedAliasName: item.normalizedName } },
@@ -335,8 +330,6 @@ export async function confirmReview(userId: string, itemId: string, input: {
     await tx.purchaseItem.update({
       where: { id: item.id },
       data: {
-        productAccountId: item.product.account.id,
-        categoryId: input.categoryId,
         behaviorType: input.behaviorType,
         estimatedDurationMonths: input.estimatedDurationMonths,
         matchConfidence: 1,

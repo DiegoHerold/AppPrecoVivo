@@ -58,17 +58,36 @@ export const passwordChangeSchema = z.object({
   path: ['newPassword'],
 })
 
-export const accountCategorySchema = z.object({
-  name: z.string().trim().min(2, 'Informe o nome da classificação.').max(60, 'Use no máximo 60 caracteres.'),
-  icon: z.string().trim().min(1, 'Escolha um ícone.').max(8, 'Use apenas um ícone curto.'),
-  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Escolha uma cor válida.'),
+export const planoGrupoSchema = z.object({
+  nome: z.string().trim().min(2, 'Informe o nome do grupo.').max(60, 'Use no máximo 60 caracteres.'),
+  icone: z.string().trim().min(1, 'Escolha um ícone.').max(8, 'Use apenas um ícone curto.'),
+  cor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Escolha uma cor válida.'),
   parentId: z.string().trim().nullable().optional(),
   allowedUnits: z.array(z.enum(measureUnitValues)).min(1, 'Escolha ao menos uma unidade de medida.'),
-  active: z.boolean().optional(),
+  ativo: z.boolean().optional(),
 })
 
-export const accountCategoryUpdateSchema = accountCategorySchema.partial().refine((value) => Object.keys(value).length > 0, {
-  message: 'Informe ao menos uma alteração.',
+export const planoGrupoUpdateSchema = z.object({
+  nome: z.string().trim().min(2, 'Informe o nome.').max(60, 'Use no máximo 60 caracteres.').optional(),
+  icone: z.string().trim().min(1).max(8).optional(),
+  cor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Escolha uma cor válida.').optional(),
+  allowedUnits: z.array(z.enum(measureUnitValues)).min(1).optional(),
+  ativo: z.boolean().optional(),
+}).refine((value) => Object.keys(value).length > 0, { message: 'Informe ao menos uma alteração.' })
+
+export const planoProdutoSchema = z.object({
+  standardName: z.string().trim().min(2, 'Informe o nome do produto.').max(120, 'Use no máximo 120 caracteres.'),
+  groupId: z.string().min(1, 'Escolha um grupo.'),
+  behaviorType: z.enum(behaviorValues),
+  estimatedDurationMonths: z.coerce.number().min(1).max(24).default(1),
+  defaultUnit: z.enum(measureUnitValues),
+  brand: z.string().trim().max(80).optional().or(z.literal('')),
+  packageSize: z.string().trim().max(40).optional().or(z.literal('')),
+})
+
+export const planoMoveSchema = z.object({
+  parentId: z.string().trim().min(1).nullable(),
+  ordem: z.coerce.number().int().min(0).optional(),
 })
 
 export const purchaseItemSchema = z.object({
