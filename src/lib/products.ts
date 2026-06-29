@@ -1,10 +1,24 @@
 import type { z } from 'zod'
+import type { BehaviorType, Prisma } from '@/generated/prisma/client'
 import { prisma } from '@/lib/prisma'
 import { recalculatePurchaseMonth } from '@/lib/monthly-flow'
 import { getProductDetail } from '@/lib/queries'
 import type { productUpdateSchema } from '@/lib/validation'
 
 type ProductUpdateInput = z.infer<typeof productUpdateSchema>
+type ProductTransaction = Prisma.TransactionClient
+
+export type NewProductInput = {
+  standardName: string
+  categoryId: string
+  behaviorType: BehaviorType
+  estimatedDurationMonths: number
+  defaultUnit: string
+  classificationConfirmed: boolean
+  active?: boolean
+  brand?: string | null
+  packageSize?: string | null
+}
 
 export class ProductUpdateError extends Error {
   constructor(message: string, public status = 400) {
@@ -13,11 +27,39 @@ export class ProductUpdateError extends Error {
   }
 }
 
+export async function createProductWithAccount(tx: ProductTransaction, userId: string, input: NewProductInput) {
+  const product = await tx.product.create({
+    data: {
+      userId,
+      standardName: input.standardName,
+      categoryId: input.categoryId,
+      behaviorType: input.behaviorType,
+      estimatedDurationMonths: input.estimatedDurationMonths,
+      defaultUnit: input.defaultUnit,
+      classificationConfirmed: input.classificationConfirmed,
+      active: input.active ?? true,
+      brand: input.brand || null,
+      packageSize: input.packageSize || null,
+    },
+  })
+  const account = await tx.productAccount.create({
+    data: {
+      userId,
+      productId: product.id,
+      name: product.standardName,
+      type: 'PRODUTO',
+      categoryId: product.categoryId,
+      active: product.active,
+    },
+  })
+  return { product, account }
+}
+
 export async function updateProduct(userId: string, productId: string, input: ProductUpdateInput) {
   const [product, category, duplicate] = await Promise.all([
     prisma.product.findFirst({
       where: { id: productId, userId, active: true },
-      include: { items: { include: { purchase: { select: { purchaseDate: true } } } } },
+      include: { account: true, items: { include: { purchase: { select: { purchaseDate: true } } } } },
     }),
     prisma.category.findFirst({ where: { id: input.categoryId, userId, active: true } }),
     prisma.product.findFirst({
@@ -27,6 +69,7 @@ export async function updateProduct(userId: string, productId: string, input: Pr
   ])
 
   if (!product) throw new ProductUpdateError('Produto não encontrado.', 404)
+  if (!product.account) throw new ProductUpdateError('Produto sem conta correspondente no plano de contas.', 409)
   if (!category) throw new ProductUpdateError('Classificação não encontrada ou desativada.', 404)
   if (duplicate) throw new ProductUpdateError('Já existe outro produto com esse nome.', 409)
   if (!category.allowedUnits.includes(input.defaultUnit)) {
@@ -47,10 +90,19 @@ export async function updateProduct(userId: string, productId: string, input: Pr
         classificationConfirmed: true,
       },
     })
+    await tx.productAccount.update({
+      where: { productId },
+      data: {
+        name: input.standardName,
+        categoryId: input.categoryId,
+        active: true,
+      },
+    })
     if (input.applyToHistory) {
       await tx.purchaseItem.updateMany({
         where: { productId, purchase: { userId } },
         data: {
+          productAccountId: product.account.id,
           categoryId: input.categoryId,
           behaviorType: input.behaviorType,
           estimatedDurationMonths: input.estimatedDurationMonths,
@@ -71,4 +123,20 @@ export async function updateProduct(userId: string, productId: string, input: Pr
   }
 
   return getProductDetail(userId, productId)
+}
+
+export async function deactivateProduct(userId: string, productId: string) {
+  const product = await prisma.product.findFirst({
+    where: { id: productId, userId, active: true },
+    include: { account: true },
+  })
+  if (!product) throw new ProductUpdateError('Produto não encontrado.', 404)
+  if (!product.account) throw new ProductUpdateError('Produto sem conta correspondente no plano de contas.', 409)
+
+  await prisma.$transaction(async (tx) => {
+    await tx.product.update({ where: { id: productId }, data: { active: false } })
+    await tx.productAccount.update({ where: { productId }, data: { active: false } })
+  })
+
+  return { id: productId, active: false, accountId: product.account.id, accountActive: false }
 }

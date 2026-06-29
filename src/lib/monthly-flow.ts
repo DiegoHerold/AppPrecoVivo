@@ -28,12 +28,16 @@ export async function loadFlowItems(userId: string, year: number, month: number)
     where: {
       purchase: { userId, purchaseDate: { gte: range.start, lt: range.end } },
     },
-    include: { product: { select: { standardName: true } }, category: { select: { name: true } } },
+    include: {
+      product: { select: { standardName: true } },
+      productAccount: { select: { id: true, name: true } },
+      category: { select: { name: true } },
+    },
   })
 
   return rows.map((item) => ({
-    key: item.productId ?? item.normalizedName,
-    name: item.product?.standardName ?? item.rawName,
+    key: item.productAccountId ?? item.productId ?? item.normalizedName,
+    name: item.productAccount?.name ?? item.product?.standardName ?? item.rawName,
     purchaseId: item.purchaseId,
     quantity: number(item.quantity),
     unit: item.unit,

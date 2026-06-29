@@ -21,6 +21,11 @@ export type AccountPlanCategoryDto = {
   id: string; parentId: string | null; name: string; icon: string; color: string; active: boolean; level: number; path: string[]
   allowedUnits: MeasureUnit[]
   childrenCount: number; productCount: number; itemCount: number
+  accounts: ProductAccountDto[]
+}
+export type ProductAccountDto = {
+  id: string; productId: string; name: string; type: 'PRODUTO'; categoryId: string; active: boolean; createdAt: string
+  itemCount: number; defaultUnit: string; behaviorType: BehaviorType; productActive: boolean
 }
 export type InsightDto = { id: string; type: string; title: string; description: string; amount: number }
 export type DashboardDto = {
@@ -37,7 +42,8 @@ export type DashboardDto = {
   }
 }
 export type ProductDto = {
-  id: string; standardName: string; brand?: string | null; behaviorType: BehaviorType; estimatedDurationMonths: number
+  id: string; accountPlanId: string; accountName: string; accountActive: boolean
+  standardName: string; brand?: string | null; behaviorType: BehaviorType; estimatedDurationMonths: number
   defaultUnit: string; packageSize?: string | null; categoryName: string; categoryIcon: string; categoryColor: string
   lastPrice: number; lastPurchaseDate: string | null; purchaseCount: number
 }

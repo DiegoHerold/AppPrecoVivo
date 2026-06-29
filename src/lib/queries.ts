@@ -112,15 +112,20 @@ export async function listProducts(userId: string) {
   const products = await prisma.product.findMany({
     where: { userId, active: true },
     include: {
+      account: true,
       category: { select: { name: true, icon: true, color: true } },
       items: { include: { purchase: { select: { purchaseDate: true } } } },
     },
     orderBy: { updatedAt: 'desc' },
   })
   return products.map((product) => {
+    if (!product.account) throw new Error('Produto sem conta correspondente no plano de contas.')
     const history = product.items.sort((a, b) => b.purchase.purchaseDate.getTime() - a.purchase.purchaseDate.getTime())
     return {
       id: product.id,
+      accountPlanId: product.account.id,
+      accountName: product.account.name,
+      accountActive: product.account.active,
       standardName: product.standardName,
       brand: product.brand,
       behaviorType: product.behaviorType,
@@ -141,11 +146,13 @@ export async function getProductDetail(userId: string, productId: string) {
   const product = await prisma.product.findFirst({
     where: { id: productId, userId, active: true },
     include: {
+      account: true,
       category: true,
       items: { include: { purchase: { include: { store: true } } } },
     },
   })
   if (!product) return null
+  if (!product.account) throw new Error('Produto sem conta correspondente no plano de contas.')
   const history = product.items.sort((a, b) => b.purchase.purchaseDate.getTime() - a.purchase.purchaseDate.getTime())
   const prices = history.map((item) => toNumber(item.unitPrice))
   const averagePrice = prices.length ? prices.reduce((sum, price) => sum + price, 0) / prices.length : 0
@@ -153,6 +160,9 @@ export async function getProductDetail(userId: string, productId: string) {
   const intervals = history.slice(0, -1).map((item, index) => Math.abs(item.purchase.purchaseDate.getTime() - history[index + 1].purchase.purchaseDate.getTime()) / 86_400_000)
   return {
     id: product.id,
+    accountPlanId: product.account.id,
+    accountName: product.account.name,
+    accountActive: product.account.active,
     standardName: product.standardName,
     brand: product.brand,
     behaviorType: product.behaviorType,

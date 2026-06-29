@@ -1,7 +1,7 @@
 import { requireUser } from '@/lib/auth'
 import { errorResponse } from '@/lib/http'
 import { getProductDetail } from '@/lib/queries'
-import { ProductUpdateError, updateProduct } from '@/lib/products'
+import { deactivateProduct, ProductUpdateError, updateProduct } from '@/lib/products'
 import { productUpdateSchema } from '@/lib/validation'
 
 function productError(error: unknown) {
@@ -27,6 +27,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       request.json().then((body) => productUpdateSchema.parse(body)),
     ])
     return Response.json(await updateProduct(user.id, route.id, input))
+  } catch (error) {
+    return productError(error)
+  }
+}
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const [user, route] = await Promise.all([requireUser(), params])
+    return Response.json(await deactivateProduct(user.id, route.id))
   } catch (error) {
     return productError(error)
   }

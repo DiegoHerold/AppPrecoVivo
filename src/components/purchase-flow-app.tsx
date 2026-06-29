@@ -5,7 +5,7 @@ import { clientApi } from '@/lib/client-api'
 import type { AccountPlanCategoryDto, AppScreen, CategoryDto, DashboardDto, ProductDetailDto, ProductDto, PurchaseDto, ReviewDto, UserDto } from '@/lib/client-types'
 import { AuthScreen } from './auth-screen'
 import { AddNoteScreen } from './add-note-screen'
-import { BottomNav, ErrorState, LoadingState, StatusBar } from './ui'
+import { BottomNav, ErrorState, LoadingState } from './ui'
 import { HomeScreen } from './home-screen'
 import { FlowScreen } from './flow-screen'
 import { ProductsScreen } from './products-screen'
@@ -118,14 +118,14 @@ export function PurchaseFlowApp() {
 
   const navVisible = !withoutBottomNav.has(screen)
   const selectableCategories = categories.filter((category) => category.active)
-  return <main className="device-stage"><section className={`phone-frame ${screen === 'add' ? 'bg-[#08080B]' : 'bg-[#F4F6FA]'}`}><StatusBar /><div className={`app-viewport ${navVisible ? 'with-nav' : ''}`}><div key={`${screen}-${selectedProductId ?? ''}-${selectedPurchaseId ?? ''}`} className="h-full overflow-y-auto scrollbar-none">
+  return <main className={`app-shell ${screen === 'add' ? 'app-shell-dark' : ''}`}><section className={`app-surface ${screen === 'add' ? 'bg-[#08080B]' : 'bg-[#F4F6FA]'}`}><div className={`app-viewport ${navVisible ? 'with-nav' : ''}`}><div key={`${screen}-${selectedProductId ?? ''}-${selectedPurchaseId ?? ''}`} className="app-scroll scrollbar-none">
     {loading && !dashboard ? <LoadingState /> : error && !dashboard ? <ErrorState message={error} retry={() => void reloadAll()} /> : <>
       {screen === 'home' && dashboard && <HomeScreen user={user} data={dashboard} reviewCount={reviews.length} navigate={navigate} />}
       {screen === 'profile' && <ProfileScreen user={user} onBack={goBack} updated={setUser} logout={() => void logout()} />}
       {screen === 'flow' && dashboard && <FlowScreen data={filteredFlow ?? dashboard} changeMonth={changeMonth} selectCategory={(id) => void selectFlowCategory(id)} loading={flowLoading} />}
       {screen === 'products' && <ProductsScreen products={products} openProduct={(id) => void openProduct(id)} openCategories={() => navigate('categories')} />}
-      {screen === 'categories' && <CategoriesScreen categories={accountPlan} onBack={goBack} changed={reloadAll} />}
-      {screen === 'product' && (product ? <ProductDetailScreen product={product} categories={selectableCategories} onBack={goBack} updated={async (next) => { setProduct(next); await reloadAll() }} /> : <LoadingState label="Carregando histórico…" />)}
+      {screen === 'categories' && <CategoriesScreen categories={accountPlan} onBack={goBack} changed={reloadAll} openProduct={(id) => void openProduct(id)} />}
+      {screen === 'product' && (product ? <ProductDetailScreen product={product} categories={selectableCategories} onBack={goBack} updated={async (next) => { setProduct(next); await reloadAll() }} removed={async () => { setProduct(null); await reloadAll(); goBack() }} /> : <LoadingState label="Carregando histórico…" />)}
       {screen === 'add' && <AddNoteScreen navigate={navigate} onBack={goBack} cameraFacingMode={user.settings.cameraFacingMode} created={purchaseCreated} />}
       {screen === 'manual' && <ManualPurchaseScreen categories={selectableCategories} onBack={goBack} created={purchaseCreated} />}
       {screen === 'text' && <TextPurchaseScreen onBack={goBack} created={purchaseCreated} />}
@@ -133,5 +133,5 @@ export function PurchaseFlowApp() {
       {screen === 'summary' && <SummaryScreen purchase={purchase} onBack={goBack} navigate={navigate} />}
       {screen === 'reviews' && <ReviewsScreen reviews={reviews} categories={selectableCategories} onBack={goBack} confirmed={reviewConfirmed} />}
     </>}
-  </div></div>{navVisible && <BottomNav screen={screen} navigate={navigate} />}<div className="home-indicator" /></section></main>
+  </div></div>{navVisible && <BottomNav screen={screen} navigate={navigate} />}</section></main>
 }

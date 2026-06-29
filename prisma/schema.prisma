@@ -81,6 +81,10 @@ enum CameraFacingMode {
   user
 }
 
+enum AccountPlanType {
+  PRODUTO
+}
+
 model User {
   id              String           @id @default(cuid())
   name            String
@@ -94,6 +98,7 @@ model User {
   sessions        Session[]
   categories      Category[]
   products        Product[]
+  productAccounts ProductAccount[]
   purchases       Purchase[]
   importJobs      ImportJob[]
   monthlyFlows    MonthlyFlow[]
@@ -103,17 +108,17 @@ model User {
 }
 
 model UserSettings {
-  id                     String           @id @default(cuid())
-  userId                 String           @unique
-  theme                  ThemePreference  @default(system)
-  cameraFacingMode       CameraFacingMode @default(environment)
-  notificationsEnabled   Boolean          @default(true)
-  monthlySummaryEnabled  Boolean          @default(true)
-  priceAlertsEnabled     Boolean          @default(true)
-  compactMode            Boolean          @default(false)
-  createdAt              DateTime         @default(now())
-  updatedAt              DateTime         @updatedAt
-  user                   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                    String           @id @default(cuid())
+  userId                String           @unique
+  theme                 ThemePreference  @default(system)
+  cameraFacingMode      CameraFacingMode @default(environment)
+  notificationsEnabled  Boolean          @default(true)
+  monthlySummaryEnabled Boolean          @default(true)
+  priceAlertsEnabled    Boolean          @default(true)
+  compactMode           Boolean          @default(false)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model UploadedFile {
@@ -156,47 +161,68 @@ model Store {
 }
 
 model Category {
-  id        String         @id @default(cuid())
-  userId    String
-  parentId  String?
-  name      String
-  icon      String
-  color     String
-  allowedUnits String[]       @default(["un", "pct", "cx"])
-  active    Boolean        @default(true)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parent    Category?      @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children  Category[]     @relation("CategoryTree")
-  products  Product[]
-  items     PurchaseItem[]
+  id              String           @id @default(cuid())
+  userId          String
+  parentId        String?
+  name            String
+  icon            String
+  color           String
+  allowedUnits    String[]         @default(["un", "pct", "cx"])
+  active          Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent          Category?        @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children        Category[]       @relation("CategoryTree")
+  products        Product[]
+  productAccounts ProductAccount[]
+  items           PurchaseItem[]
 
   @@unique([userId, name])
   @@index([userId, active])
 }
 
 model Product {
-  id                      String         @id @default(cuid())
+  id                      String          @id @default(cuid())
   userId                  String
   standardName            String
   brand                   String?
   categoryId              String
   behaviorType            BehaviorType
-  estimatedDurationMonths Decimal        @db.Decimal(6, 2)
+  estimatedDurationMonths Decimal         @db.Decimal(6, 2)
   defaultUnit             String
   packageSize             String?
-  classificationConfirmed Boolean       @default(false)
-  active                  Boolean        @default(true)
-  createdAt               DateTime       @default(now())
-  updatedAt               DateTime       @updatedAt
-  user                    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category                Category       @relation(fields: [categoryId], references: [id])
+  classificationConfirmed Boolean         @default(false)
+  active                  Boolean         @default(true)
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  user                    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category                Category        @relation(fields: [categoryId], references: [id])
   aliases                 ProductAlias[]
   items                   PurchaseItem[]
+  account                 ProductAccount?
 
   @@unique([userId, standardName])
   @@index([userId, categoryId])
+}
+
+model ProductAccount {
+  id         String          @id @default(cuid())
+  userId     String
+  productId  String          @unique
+  name       String
+  type       AccountPlanType @default(PRODUTO)
+  categoryId String
+  active     Boolean         @default(true)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product    Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  category   Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  items      PurchaseItem[]  @relation("PurchaseItemProductAccount")
+
+  @@unique([id, productId])
+  @@index([userId, categoryId, active])
 }
 
 model ProductAlias {
@@ -229,33 +255,36 @@ model Purchase {
   items        PurchaseItem[]
   importJobs   ImportJob[]
 
-  @@index([userId, purchaseDate])
   @@unique([userId, accessKey])
+  @@index([userId, purchaseDate])
 }
 
 model PurchaseItem {
-  id                      String       @id @default(cuid())
+  id                      String          @id @default(cuid())
   purchaseId              String
   rawName                 String
   normalizedName          String
   productId               String?
-  quantity                Decimal      @db.Decimal(10, 3)
+  productAccountId        String?
+  quantity                Decimal         @db.Decimal(10, 3)
   unit                    String
-  unitPrice               Decimal      @db.Decimal(12, 2)
-  totalPrice              Decimal      @db.Decimal(12, 2)
+  unitPrice               Decimal         @db.Decimal(12, 2)
+  totalPrice              Decimal         @db.Decimal(12, 2)
   categoryId              String
   behaviorType            BehaviorType
-  estimatedDurationMonths Decimal      @db.Decimal(6, 2)
-  matchConfidence         Decimal      @db.Decimal(5, 4)
-  needsReview             Boolean      @default(false)
-  createdAt               DateTime     @default(now())
-  updatedAt               DateTime     @updatedAt
-  purchase                Purchase     @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
-  product                 Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
-  category                Category     @relation(fields: [categoryId], references: [id])
+  estimatedDurationMonths Decimal         @db.Decimal(6, 2)
+  matchConfidence         Decimal         @db.Decimal(5, 4)
+  needsReview             Boolean         @default(false)
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  purchase                Purchase        @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product                 Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productAccount          ProductAccount? @relation("PurchaseItemProductAccount", fields: [productAccountId, productId], references: [id, productId], onDelete: Restrict)
+  category                Category        @relation(fields: [categoryId], references: [id])
 
   @@index([purchaseId])
   @@index([productId])
+  @@index([productAccountId])
   @@index([needsReview])
 }
 

@@ -5,6 +5,7 @@ import { classificationSimilarity, estimateProductDuration, normalizeProductName
 import { accessKeyFrom, importerFor, ManualTextImporter } from '@/lib/importers'
 import { manualPurchaseSchema, pendingImportSchema, rawTextImportSchema } from '@/lib/validation'
 import { recalculatePurchaseMonth } from '@/lib/monthly-flow'
+import { createProductWithAccount } from '@/lib/products'
 
 type Tx = Prisma.TransactionClient
 
@@ -12,13 +13,16 @@ export async function matchProductByAlias(tx: Tx, userId: string, rawName: strin
   const normalized = normalizeProductName(rawName)
   const exact = await tx.productAlias.findFirst({
     where: { normalizedAliasName: normalized, product: { userId, active: true } },
-    include: { product: true },
+    include: { product: { include: { account: true } } },
   })
-  if (exact) return { product: exact.product, confidence: 0.99 }
+  if (exact) {
+    if (!exact.product.account) throw new Error('Produto sem conta correspondente no plano de contas.')
+    return { product: exact.product, confidence: 0.99 }
+  }
 
   const products = await tx.product.findMany({
     where: { userId, active: true },
-    include: { aliases: { select: { aliasName: true } } },
+    include: { account: true, aliases: { select: { aliasName: true } } },
   })
   let best: (typeof products)[number] | null = null
   let confidence = 0
@@ -30,7 +34,9 @@ export async function matchProductByAlias(tx: Tx, userId: string, rawName: strin
     }))
     if (score > confidence) { best = product; confidence = score }
   }
-  return best && confidence >= 0.78 ? { product: best, confidence } : null
+  if (!best || confidence < 0.78) return null
+  if (!best.account) throw new Error('Produto sem conta correspondente no plano de contas.')
+  return { product: best, confidence }
 }
 
 async function learnedCategoryFor(tx: Tx, userId: string, rawName: string) {
@@ -82,6 +88,7 @@ async function persistManualPurchase(userId: string, input: ManualInput, source:
         resolvedItems.push({
           ...item,
           productId: match.product.id,
+          productAccountId: match.product.account.id,
           categoryId: match.product.categoryId,
           behaviorType: match.product.behaviorType,
           estimatedDurationMonths: Number(match.product.estimatedDurationMonths),
@@ -94,19 +101,16 @@ async function persistManualPurchase(userId: string, input: ManualInput, source:
       const learned = await learnedCategoryFor(tx, userId, item.rawName)
       const manuallyClassified = source.inputType === 'manual'
       const confidence = manuallyClassified ? 1 : learned?.confidence ?? 0.45
-      const product = await tx.product.create({
-        data: {
-          userId,
-          standardName: item.rawName,
-          categoryId: learned?.categoryId ?? item.categoryId,
-          behaviorType: item.behaviorType,
-          estimatedDurationMonths: item.estimatedDurationMonths,
-          defaultUnit: item.unit,
-          classificationConfirmed: manuallyClassified,
-          active: true,
-        },
+      const { product, account } = await createProductWithAccount(tx, userId, {
+        standardName: item.rawName,
+        categoryId: learned?.categoryId ?? item.categoryId,
+        behaviorType: item.behaviorType,
+        estimatedDurationMonths: item.estimatedDurationMonths,
+        defaultUnit: item.unit,
+        classificationConfirmed: manuallyClassified,
+        active: true,
       })
-      resolvedItems.push({ ...item, productId: product.id, categoryId: product.categoryId, confidence, needsReview: !manuallyClassified && confidence < 0.85 })
+      resolvedItems.push({ ...item, productId: product.id, productAccountId: account.id, categoryId: product.categoryId, confidence, needsReview: !manuallyClassified && confidence < 0.85 })
     }
 
     const created = await tx.purchase.create({
@@ -124,6 +128,7 @@ async function persistManualPurchase(userId: string, input: ManualInput, source:
             rawName: item.rawName,
             normalizedName: normalizeProductName(item.rawName),
             productId: item.productId,
+            productAccountId: item.productAccountId,
             quantity: item.quantity,
             unit: item.unit,
             unitPrice: item.unitPrice,
@@ -302,9 +307,10 @@ export async function confirmReview(userId: string, itemId: string, input: {
   const result = await prisma.$transaction(async (tx) => {
     const item = await tx.purchaseItem.findFirst({
       where: { id: itemId, purchase: { userId } },
-      include: { purchase: { select: { id: true, purchaseDate: true } } },
+      include: { product: { include: { account: true } }, purchase: { select: { id: true, purchaseDate: true } } },
     })
     if (!item || !item.productId) throw new Error('Item não encontrado.')
+    if (!item.product?.account) throw new Error('Produto sem conta correspondente no plano de contas.')
     const category = await tx.category.findFirst({ where: { id: input.categoryId, userId, active: true } })
     if (!category) throw new Error('Categoria inválida.')
     await tx.product.update({
@@ -317,6 +323,10 @@ export async function confirmReview(userId: string, itemId: string, input: {
         classificationConfirmed: true,
       },
     })
+    await tx.productAccount.update({
+      where: { productId: item.productId },
+      data: { name: input.standardName, categoryId: input.categoryId, active: true },
+    })
     await tx.productAlias.upsert({
       where: { productId_normalizedAliasName: { productId: item.productId, normalizedAliasName: item.normalizedName } },
       update: { aliasName: item.rawName, source: 'revisao_usuario' },
@@ -325,6 +335,7 @@ export async function confirmReview(userId: string, itemId: string, input: {
     await tx.purchaseItem.update({
       where: { id: item.id },
       data: {
+        productAccountId: item.product.account.id,
         categoryId: input.categoryId,
         behaviorType: input.behaviorType,
         estimatedDurationMonths: input.estimatedDurationMonths,

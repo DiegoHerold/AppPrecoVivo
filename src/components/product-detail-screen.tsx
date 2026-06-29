@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CalendarDays, Check, Clock3, Package, Pencil, X } from 'lucide-react'
+import { CalendarDays, Check, Clock3, Package, Pencil, Trash2, X } from 'lucide-react'
 import { brl, clientApi, dateLabel } from '@/lib/client-api'
 import type { BehaviorType, CategoryDto, MeasureUnit, ProductDetailDto } from '@/lib/client-types'
 import { BEHAVIORS, BehaviorBadge, EmptyState, PageHeader, PrimaryButton } from './ui'
@@ -40,14 +40,16 @@ const behaviorHelp: Record<BehaviorType, string> = {
   fora_do_padrao: 'Compra que não representa seu comportamento normal.',
 }
 
-export function ProductDetailScreen({ product, categories, onBack, updated }: {
+export function ProductDetailScreen({ product, categories, onBack, updated, removed }: {
   product: ProductDetailDto | null
   categories: CategoryDto[]
   onBack: () => void
   updated: (product: ProductDetailDto) => void | Promise<void>
+  removed: () => void | Promise<void>
 }) {
   const [draft, setDraft] = useState<ProductDraft | null>(null)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [message, setMessage] = useState('')
 
   if (!product) return <div className="px-4"><PageHeader title="Produto" onBack={onBack} /><EmptyState title="Produto não encontrado" description="Este produto não está disponível na sua conta." /></div>
@@ -78,12 +80,29 @@ export function ProductDetailScreen({ product, categories, onBack, updated }: {
     }
   }
 
+  async function deactivate() {
+    if (!window.confirm('Desativar este produto? A conta ficará inativa, mas todo o histórico financeiro será preservado.')) return
+    setDeleting(true)
+    setMessage('')
+    try {
+      await clientApi('/api/products/' + productId, { method: 'DELETE' })
+      await removed()
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Não foi possível desativar o produto.')
+      setDeleting(false)
+    }
+  }
+
   return <div className="px-4 pb-8"><PageHeader title={product.standardName} subtitle={product.categoryName + ' · histórico pessoal'} onBack={onBack} action={<button aria-label="Editar produto" onClick={() => { setMessage(''); setDraft(draftFrom(product)) }} className="flex h-9 items-center gap-1 rounded-full bg-indigo-50 px-3 text-[9px] font-bold text-indigo-600"><Pencil size={13} /> Editar</button>} />
     <section className="flex items-start gap-3"><span className="grid h-11 w-11 place-items-center rounded-xl" style={{ background: product.categoryColor + '15', color: product.categoryColor }}><Package size={20} /></span><div className="min-w-0 flex-1"><h1 className="text-sm font-black leading-4">{product.standardName}</h1><p className="mt-1 text-[8px] text-slate-400">{product.brand || 'Sem marca'} · {product.packageSize || 'Medida padrão'} · {product.defaultUnit}</p><div className="mt-2"><BehaviorBadge behavior={product.behaviorType} /></div></div><div className="text-right"><strong className="block text-xl font-black">{brl(product.lastPrice)}</strong><small className="text-[7px] text-slate-400">última compra</small></div></section>
+    <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-[9px] text-emerald-700"><Check size={16} /><span><b>Conta própria no Plano de Contas</b><br />{product.accountName} · {product.accountActive ? 'ativa' : 'inativa'}</span></div>
     <div className="mt-3 flex gap-2 rounded-xl bg-emerald-50 p-3 text-[9px] leading-4 text-emerald-700"><Clock3 size={15} className="shrink-0" /><p>{product.behaviorType === 'estoque' ? <>Esse produto costuma durar cerca de <b>{product.estimatedDurationMonths} {product.estimatedDurationMonths === 1 ? 'mês' : 'meses'}</b>. O custo mensal estimado é <b>{brl(product.monthlyCost)}</b>.</> : <><b>{BEHAVIORS[product.behaviorType].label}.</b> {behaviorHelp[product.behaviorType]}</>}</p></div>
     <div className="mt-3 grid grid-cols-2 gap-2"><article className="rounded-xl bg-emerald-50 p-3"><span className="text-[7px] text-slate-400">Menor preço pago</span><strong className="block text-sm text-emerald-600">{brl(product.minimumPrice)}</strong></article><article className="rounded-xl bg-rose-50 p-3"><span className="text-[7px] text-slate-400">Maior preço pago</span><strong className="block text-sm text-rose-500">{brl(product.maximumPrice)}</strong></article><article className="rounded-xl bg-indigo-50 p-3"><span className="text-[7px] text-slate-400">Custo mensal est.</span><strong className="block text-sm text-indigo-600">{brl(product.monthlyCost)}</strong></article><article className="rounded-xl border border-slate-200 bg-white p-3"><span className="text-[7px] text-slate-400">Média histórica</span><strong className="block text-sm">{brl(product.averagePrice)}</strong></article></div>
     <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-3"><div className="flex justify-between"><h2 className="text-[10px] font-bold">Preço nas suas compras</h2><span className="rounded bg-slate-100 px-2 py-1 text-[7px] text-slate-400">do seu histórico</span></div>{points.length > 1 ? <svg viewBox="0 0 290 105" className="mt-2 h-28 w-full" aria-label="Histórico de preços"><polyline fill="none" stroke="#635BFF" strokeWidth="2" points={coordinates} />{points.map((item, index) => <g key={item.id}><circle cx={20 + index * (250 / Math.max(1, points.length - 1))} cy={82 - ((item.unitPrice - min) / Math.max(1, max - min)) * 54} r="3" fill="#635BFF" /><text x={20 + index * (250 / Math.max(1, points.length - 1))} y="100" textAnchor="middle" fontSize="7" fill="#94A3B8">{dateLabel(item.purchaseDate).slice(0, 6)}</text></g>)}</svg> : <p className="py-10 text-center text-[9px] text-slate-400">O gráfico aparecerá após a segunda compra.</p>}<p className="text-center text-[7px] text-slate-400">Apenas preços das suas próprias compras</p></section>
     <section className="mt-4"><h2 className="mb-2 text-[10px] font-bold">Compras anteriores</h2><div className="grid gap-1">{product.history.map((item) => <article key={item.id} className="flex items-center gap-2 border-b border-slate-200 py-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-50 text-indigo-500"><CalendarDays size={13} /></span><div className="flex-1"><strong className="block text-[9px]">{item.storeName}</strong><small className="text-[7px] text-slate-400">{dateLabel(item.purchaseDate)} · {item.quantity} {item.unit}</small></div><b className="text-[9px]">{brl(item.unitPrice)}</b></article>)}</div></section>
+    {message && !draft && <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-[9px] text-rose-600">{message}</p>}
+    <button onClick={() => void deactivate()} disabled={deleting} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 text-[10px] font-bold text-rose-600 disabled:opacity-50"><Trash2 size={17} /> {deleting ? 'Desativando…' : 'Desativar produto'}</button>
+    <p className="mt-2 text-center text-[8px] text-slate-500">A conta será inativada; compras e relatórios anteriores serão preservados.</p>
 
     {draft && <div className="absolute inset-0 z-[90] flex items-end bg-slate-950/40 p-3 backdrop-blur-[1px]" role="dialog" aria-label="Editar produto">
       <section className="max-h-[91%] w-full overflow-y-auto rounded-3xl bg-white p-4 shadow-2xl">

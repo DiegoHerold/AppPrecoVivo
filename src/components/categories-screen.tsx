@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { Check, ChevronDown, ChevronRight, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Fragment, useMemo, useState } from 'react'
+import { Check, ChevronDown, ChevronRight, Package, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { clientApi } from '@/lib/client-api'
 import type { AccountPlanCategoryDto, MeasureUnit } from '@/lib/client-types'
 import { PageHeader, PrimaryButton } from './ui'
@@ -46,10 +46,11 @@ function flattenVisible(categories: AccountPlanCategoryDto[], expanded: Set<stri
   return result
 }
 
-export function CategoriesScreen({ categories, onBack, changed }: {
+export function CategoriesScreen({ categories, onBack, changed, openProduct }: {
   categories: AccountPlanCategoryDto[]
   onBack: () => void
   changed: () => Promise<void>
+  openProduct: (id: string) => void
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [editor, setEditor] = useState<Editor | null>(null)
@@ -111,15 +112,27 @@ export function CategoriesScreen({ categories, onBack, changed }: {
     <div className="mb-3 grid grid-cols-2 border-b border-slate-200"><button onClick={onBack} className="py-2 text-[10px] text-slate-400">Meus produtos</button><button className="border-b-2 border-indigo-500 py-2 text-[10px] font-bold text-indigo-600">Plano de contas</button></div>
     <div className="mb-3 rounded-xl bg-indigo-50 p-3 text-[9px] leading-4 text-indigo-700">O plano de contas define como os produtos são classificados, quais medidas aceitam e como você navega pelos relatórios.</div>
     <div className="grid gap-1.5">
-      {rows.map((category) => <article key={category.id} className={'relative flex min-h-12 items-center gap-2 rounded-xl border bg-white px-2.5 shadow-sm ' + (category.active ? 'border-slate-200' : 'border-dashed border-slate-200 opacity-55')} style={{ marginLeft: category.level * 11 }}>
-        {category.level > 0 && <span className="absolute -left-2.5 top-1/2 h-px w-2.5 bg-indigo-200" />}
-        <button aria-label={(expanded.has(category.id) ? 'Recolher ' : 'Expandir ') + category.name} onClick={() => toggle(category.id)} disabled={!category.childrenCount} className="grid h-7 w-6 place-items-center text-indigo-400 disabled:text-slate-200">{category.childrenCount ? expanded.has(category.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} /> : <span className="h-1 w-1 rounded-full bg-current" />}</button>
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg" style={{ background: category.color + '15' }}>{category.icon}</span>
-        <span className="min-w-0 flex-1"><strong className="block truncate text-[10px]">{category.name}</strong><small className="block truncate text-[7px] text-slate-400">{(category.allowedUnits ?? ['un']).join(', ')} · {category.childrenCount ? String(category.childrenCount) + (category.childrenCount === 1 ? ' subnível' : ' subníveis') : category.productCount ? String(category.productCount) + (category.productCount === 1 ? ' produto' : ' produtos') : category.active ? 'Sem produtos' : 'Desativada'}</small></span>
-        <button aria-label={'Criar subcategoria em ' + category.name} onClick={() => setEditor(emptyEditor(category.id))} className="grid h-7 w-7 place-items-center text-indigo-500"><Plus size={14} /></button>
-        <button aria-label={'Editar ' + category.name} onClick={() => setEditor({ id: category.id, name: category.name, icon: category.icon, color: category.color, parentId: category.parentId, allowedUnits: category.allowedUnits ?? ['un'], active: category.active })} className="grid h-7 w-7 place-items-center text-slate-400"><Pencil size={13} /></button>
-        <button aria-label={'Excluir ' + category.name} onClick={() => void remove(category)} className="grid h-7 w-7 place-items-center text-rose-400"><Trash2 size={13} /></button>
-      </article>)}
+      {rows.map((category) => {
+        const accounts = category.accounts ?? []
+        const expandable = category.childrenCount > 0 || accounts.length > 0
+        return <Fragment key={category.id}>
+          <article className={'relative flex min-h-12 items-center gap-2 rounded-xl border bg-white px-2.5 shadow-sm ' + (category.active ? 'border-slate-200' : 'border-dashed border-slate-200 opacity-55')} style={{ marginLeft: category.level * 11 }}>
+            {category.level > 0 && <span className="absolute -left-2.5 top-1/2 h-px w-2.5 bg-indigo-200" />}
+            <button aria-label={(expanded.has(category.id) ? 'Recolher ' : 'Expandir ') + category.name} onClick={() => toggle(category.id)} disabled={!expandable} className="grid h-7 w-6 place-items-center text-indigo-400 disabled:text-slate-200">{expandable ? expanded.has(category.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} /> : <span className="h-1 w-1 rounded-full bg-current" />}</button>
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg" style={{ background: category.color + '15' }}>{category.icon}</span>
+            <span className="min-w-0 flex-1"><strong className="block truncate text-[10px]">{category.name}</strong><small className="block truncate text-[7px] text-slate-400">{(category.allowedUnits ?? ['un']).join(', ')} · {accounts.length ? String(accounts.length) + (accounts.length === 1 ? ' conta de produto' : ' contas de produto') : category.childrenCount ? String(category.childrenCount) + (category.childrenCount === 1 ? ' subnível' : ' subníveis') : category.active ? 'Sem produtos' : 'Desativada'}</small></span>
+            <button aria-label={'Criar subcategoria em ' + category.name} onClick={() => setEditor(emptyEditor(category.id))} className="grid h-7 w-7 place-items-center text-indigo-500"><Plus size={14} /></button>
+            <button aria-label={'Editar ' + category.name} onClick={() => setEditor({ id: category.id, name: category.name, icon: category.icon, color: category.color, parentId: category.parentId, allowedUnits: category.allowedUnits ?? ['un'], active: category.active })} className="grid h-7 w-7 place-items-center text-slate-400"><Pencil size={13} /></button>
+            <button aria-label={'Excluir ' + category.name} onClick={() => void remove(category)} className="grid h-7 w-7 place-items-center text-rose-400"><Trash2 size={13} /></button>
+          </article>
+          {expanded.has(category.id) && accounts.map((account) => <article key={account.id} className={'relative flex min-h-14 items-center gap-2 rounded-xl border px-3 shadow-sm ' + (account.active ? 'border-emerald-100 bg-emerald-50/60' : 'border-dashed border-slate-200 bg-slate-50 opacity-65')} style={{ marginLeft: (category.level + 1) * 11 }}>
+            <span className="absolute -left-2.5 top-1/2 h-px w-2.5 bg-emerald-200" />
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-emerald-600"><Package size={17} /></span>
+            <span className="min-w-0 flex-1"><strong className="block truncate text-[10px]">{account.name}</strong><small className="block truncate text-[7px] text-slate-500">Conta de produto · {account.defaultUnit} · {account.itemCount} {account.itemCount === 1 ? 'movimentação' : 'movimentações'} · {account.active ? 'ativa' : 'inativa'}</small></span>
+            {account.productActive && <button aria-label={'Abrir produto ' + account.name} onClick={() => openProduct(account.productId)} className="grid h-9 w-9 place-items-center rounded-xl bg-white text-indigo-600"><ChevronRight size={16} /></button>}
+          </article>)}
+        </Fragment>
+      })}
     </div>
     <button onClick={() => setEditor(emptyEditor())} className="mt-3 flex w-full items-center justify-center gap-1 rounded-xl border border-dashed border-indigo-300 py-3 text-[9px] font-semibold text-indigo-600"><Plus size={14} /> Nova categoria principal</button>
     {message && <p role="status" className={'mt-3 rounded-xl p-3 text-[9px] ' + (message.includes('atualizado') || message.includes('excluída') ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600')}>{message}</p>}

@@ -47,7 +47,7 @@ export function ProfileScreen({ user, onBack, updated, logout }: { user: UserDto
       stream.getTracks().forEach((track) => track.stop())
       setCameraStatus('Câmera disponível e autorizada')
     } catch (error) {
-      setCameraStatus(error instanceof DOMException && error.name === 'NotAllowedError' ? 'Permissão negada no navegador' : error instanceof DOMException && error.name === 'TimeoutError' ? 'Permissão não respondida' : error instanceof Error && error.message === 'CAMERA_UNAVAILABLE' ? 'Acesso indisponível. Use HTTPS ou localhost.' : error instanceof Error ? error.message : 'Câmera indisponível')
+      setCameraStatus(error instanceof DOMException && error.name === 'NotAllowedError' ? 'Permissão negada no navegador' : error instanceof DOMException && error.name === 'TimeoutError' ? 'Permissão não respondida' : error instanceof Error && error.message === 'CAMERA_UNAVAILABLE' ? 'A câmera exige uma conexão segura (HTTPS). Você também pode escolher uma foto.' : error instanceof Error ? error.message : 'Câmera indisponível')
     } finally { setTestingCamera(false) }
   }
 

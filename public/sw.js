@@ -1,4 +1,4 @@
-const CACHE = 'fluxo-shell-v1'
+const CACHE = 'fluxo-shell-v2'
 const SHELL = ['/offline.html', '/icon-192.png', '/icon-512.png', '/manifest.webmanifest']
 
 self.addEventListener('install', (event) => {
@@ -17,4 +17,3 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(fetch(event.request).catch(() => caches.match('/offline.html')))
   }
 })
-

@@ -16,29 +16,29 @@ export const BEHAVIORS: Record<BehaviorType, { label: string; icon: string; colo
 
 export function BehaviorBadge({ behavior }: { behavior: BehaviorType }) {
   const item = BEHAVIORS[behavior]
-  return <span className="inline-flex w-fit items-center gap-1 rounded-full px-2 py-1 text-[9px] font-semibold" style={{ color: item.color, background: item.bg }}>{item.icon} {item.label}</span>
+  return <span className="inline-flex min-h-7 w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[13px] font-semibold" style={{ color: item.color, background: item.bg }}>{item.icon} {item.label}</span>
 }
 
 export function PageHeader({ title, subtitle, onBack, action }: { title: string; subtitle?: string; onBack?: () => void; action?: ReactNode }) {
-  return <header className="sticky top-0 z-30 -mx-4 border-b border-slate-100 bg-white/95 px-4 py-3 backdrop-blur">
-    <div className="flex items-center gap-2">
-      {onBack && <button aria-label="Voltar" onClick={onBack} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-600"><ChevronLeft size={18} /></button>}
-      <div className="min-w-0 flex-1"><h1 className="truncate text-[15px] font-bold tracking-tight text-slate-950">{title}</h1>{subtitle && <p className="truncate text-[9px] text-slate-400">{subtitle}</p>}</div>
+  return <header className="sticky top-0 z-30 -mx-4 border-b border-slate-200/80 bg-white/95 px-4 py-3.5 backdrop-blur md:-mx-6 md:px-6">
+    <div className="flex min-h-11 items-center gap-3">
+      {onBack && <button aria-label="Voltar" onClick={onBack} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-700 transition hover:bg-slate-200"><ChevronLeft size={21} /></button>}
+      <div className="min-w-0 flex-1"><h1 className="truncate text-xl font-bold tracking-tight text-slate-950">{title}</h1>{subtitle && <p className="truncate text-sm text-slate-600">{subtitle}</p>}</div>
       {action}
     </div>
   </header>
 }
 
 export function LoadingState({ label = 'Organizando seus dados…' }: { label?: string }) {
-  return <div className="grid min-h-72 place-content-center gap-3 text-center text-xs text-slate-400"><span className="mx-auto h-7 w-7 animate-spin rounded-full border-3 border-indigo-100 border-t-indigo-500" />{label}</div>
+  return <div className="grid min-h-72 place-content-center gap-4 text-center text-sm text-slate-600"><span className="mx-auto h-8 w-8 animate-spin rounded-full border-3 border-indigo-100 border-t-indigo-500" />{label}</div>
 }
 
 export function EmptyState({ icon = <Package />, title, description, action }: { icon?: ReactNode; title: string; description: string; action?: ReactNode }) {
-  return <div className="mx-auto grid min-h-72 max-w-64 place-content-center justify-items-center gap-3 text-center"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-indigo-50 text-indigo-500">{icon}</span><strong className="text-sm text-slate-800">{title}</strong><p className="text-[11px] leading-5 text-slate-400">{description}</p>{action}</div>
+  return <div className="mx-auto grid min-h-72 max-w-sm place-content-center justify-items-center gap-4 px-4 text-center"><span className="grid h-14 w-14 place-items-center rounded-2xl bg-indigo-50 text-indigo-500">{icon}</span><strong className="text-lg text-slate-900">{title}</strong><p className="text-sm leading-6 text-slate-600">{description}</p>{action}</div>
 }
 
 export function ErrorState({ message, retry }: { message: string; retry?: () => void }) {
-  return <div className="mx-auto grid min-h-60 max-w-64 place-content-center justify-items-center gap-3 text-center"><RefreshCw className="text-rose-500" /><strong className="text-sm">Algo não saiu como esperado</strong><p className="text-[11px] text-slate-500">{message}</p>{retry && <button onClick={retry} className="text-xs font-semibold text-indigo-600">Tentar novamente</button>}</div>
+  return <div className="mx-auto grid min-h-60 max-w-sm place-content-center justify-items-center gap-4 px-4 text-center"><RefreshCw className="text-rose-500" /><strong className="text-lg">Algo não saiu como esperado</strong><p className="text-sm leading-6 text-slate-600">{message}</p>{retry && <button onClick={retry} className="min-h-11 rounded-xl px-4 text-sm font-semibold text-indigo-600">Tentar novamente</button>}</div>
 }
 
 const tabs: { screen: AppScreen; label: string; icon: typeof Home }[] = [
@@ -50,9 +50,9 @@ const tabs: { screen: AppScreen; label: string; icon: typeof Home }[] = [
 ]
 
 export function BottomNav({ screen, navigate }: { screen: AppScreen; navigate: (screen: AppScreen) => void }) {
-  return <nav aria-label="Navegação principal" className="absolute inset-x-0 bottom-0 z-50 grid h-[74px] grid-cols-5 border-t border-slate-200 bg-white px-2 pb-4 pt-2 shadow-[0_-6px_20px_rgba(15,23,42,.04)]">
-    {tabs.map((tab) => { const Icon = tab.icon; const center = tab.screen === 'add'; const active = screen === tab.screen || (tab.screen === 'products' && (screen === 'product' || screen === 'categories')); return <button key={tab.screen} aria-label={tab.label} onClick={() => navigate(tab.screen)} className={`flex flex-col items-center gap-0.5 text-[8px] ${active ? 'text-indigo-600' : 'text-slate-400'} ${center ? '-translate-y-6' : ''}`}>
-      <span className={center ? 'grid h-14 w-14 place-items-center rounded-full border-4 border-white bg-indigo-600 text-white shadow-[0_6px_20px_rgba(79,70,229,.4)]' : `grid h-7 w-8 place-items-center rounded-lg ${active ? 'bg-indigo-50' : ''}`}><Icon size={center ? 24 : 18} /></span>
+  return <nav aria-label="Navegação principal" className="bottom-navigation grid grid-cols-5 border-t border-slate-200 bg-white px-2 pt-2 shadow-[0_-8px_28px_rgba(15,23,42,.08)]">
+    {tabs.map((tab) => { const Icon = tab.icon; const center = tab.screen === 'add'; const active = screen === tab.screen || (tab.screen === 'products' && (screen === 'product' || screen === 'categories')); return <button key={tab.screen} aria-label={tab.label} onClick={() => navigate(tab.screen)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[13px] font-medium transition ${active ? 'text-indigo-600' : 'text-slate-500'} ${center ? '-translate-y-4' : ''}`}>
+      <span className={center ? 'grid h-16 w-16 place-items-center rounded-full border-4 border-white bg-indigo-600 text-white shadow-[0_8px_24px_rgba(79,70,229,.38)]' : `grid h-8 w-10 place-items-center rounded-xl ${active ? 'bg-indigo-50' : ''}`}><Icon size={center ? 27 : 21} /></span>
       {!center && <span>{tab.label}</span>}
     </button> })}
   </nav>
@@ -60,14 +60,9 @@ export function BottomNav({ screen, navigate }: { screen: AppScreen; navigate: (
 
 export function MetricCard({ label, value, detail, tone = 'plain' }: { label: string; value: string; detail: string; tone?: 'plain' | 'green' | 'cyan' | 'violet' | 'rose' }) {
   const tones = { plain: 'border-slate-200 bg-white text-slate-950', green: 'border-emerald-100 bg-emerald-50 text-emerald-700', cyan: 'border-cyan-100 bg-cyan-50 text-cyan-700', violet: 'border-indigo-100 bg-indigo-50 text-indigo-700', rose: 'border-rose-100 bg-rose-50 text-rose-600' }
-  return <article className={`min-w-0 rounded-xl border p-3 ${tones[tone]}`}><span className="block truncate text-[8px] text-slate-400">{label}</span><strong className="my-1 block text-[15px] tracking-tight">{value}</strong><small className="block text-[8px] leading-3 text-slate-400">{detail}</small></article>
+  return <article className={`flex min-h-32 min-w-0 flex-col rounded-2xl border p-4 ${tones[tone]}`}><span className="block text-sm font-medium leading-5 text-slate-600">{label}</span><strong className="my-2 block text-xl tracking-tight">{value}</strong><small className="mt-auto block text-[13px] leading-5 text-slate-600">{detail}</small></article>
 }
 
 export function PrimaryButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <button {...props} className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-[0_7px_18px_rgba(79,70,229,.25)] disabled:opacity-50 ${props.className ?? ''}`}>{children}</button>
+  return <button {...props} className={`flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 text-base font-bold text-white shadow-[0_8px_22px_rgba(79,70,229,.24)] transition active:scale-[.985] disabled:opacity-50 ${props.className ?? ''}`}>{children}</button>
 }
-
-export function StatusBar() {
-  return <div className="absolute inset-x-0 top-0 z-[80] flex h-12 items-end justify-between bg-white px-6 pb-2 text-[10px] font-bold text-slate-950"><span>9:41</span><span className="absolute left-1/2 top-2 h-7 w-24 -translate-x-1/2 rounded-full bg-black" /><span className="tracking-[-2px]">▮▮▮ ◉ ▰</span></div>
-}
-

@@ -7,15 +7,16 @@ export const metadata: Metadata = {
   description: 'Entenda quanto você gastou e por que seu mês mudou.',
   applicationName: 'Fluxo de Compras',
   manifest: '/manifest.webmanifest',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Fluxo' },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Fluxo' },
+  formatDetection: { telephone: false },
   icons: { icon: '/icon-192.png', apple: '/icon-192.png' },
 }
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: 'cover',
   themeColor: '#635BFF',
+  colorScheme: 'light',
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

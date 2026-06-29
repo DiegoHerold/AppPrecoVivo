@@ -31,7 +31,16 @@ function categoryPath(row: CategoryRow, byId: Map<string, CategoryRow>) {
 export async function listAccountPlan(userId: string) {
   const rows = await prisma.category.findMany({
     where: { userId },
-    include: { _count: { select: { children: true, products: true, items: true } } },
+    include: {
+      _count: { select: { children: true, products: true, items: true } },
+      productAccounts: {
+        include: {
+          product: { select: { active: true, defaultUnit: true, behaviorType: true } },
+          _count: { select: { items: true } },
+        },
+        orderBy: [{ active: 'desc' }, { name: 'asc' }],
+      },
+    },
     orderBy: [{ createdAt: 'asc' }, { name: 'asc' }],
   })
   const byId = new Map(rows.map((row) => [row.id, row]))
@@ -48,8 +57,21 @@ export async function listAccountPlan(userId: string) {
       level: path.length - 1,
       path,
       childrenCount: row._count.children,
-      productCount: row._count.products,
+      productCount: row.productAccounts.length,
       itemCount: row._count.items,
+      accounts: row.productAccounts.map((account) => ({
+        id: account.id,
+        productId: account.productId,
+        name: account.name,
+        type: account.type,
+        categoryId: account.categoryId,
+        active: account.active,
+        createdAt: account.createdAt.toISOString(),
+        itemCount: account._count.items,
+        defaultUnit: account.product.defaultUnit,
+        behaviorType: account.product.behaviorType,
+        productActive: account.product.active,
+      })),
     }
   }).sort((a, b) => a.path.join(' / ').localeCompare(b.path.join(' / '), 'pt-BR'))
 }
