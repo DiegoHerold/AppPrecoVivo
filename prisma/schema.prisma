@@ -168,6 +168,7 @@ model Category {
   icon            String
   color           String
   allowedUnits    String[]         @default(["un", "pct", "cx"])
+  ordem           Int              @default(0)
   active          Boolean          @default(true)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -213,6 +214,7 @@ model ProductAccount {
   name       String
   type       AccountPlanType @default(PRODUTO)
   categoryId String
+  ordem      Int             @default(0)
   active     Boolean         @default(true)
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt

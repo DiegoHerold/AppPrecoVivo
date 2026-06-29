@@ -38,10 +38,10 @@ export async function listAccountPlan(userId: string) {
           product: { select: { active: true, defaultUnit: true, behaviorType: true } },
           _count: { select: { items: true } },
         },
-        orderBy: [{ active: 'desc' }, { name: 'asc' }],
+        orderBy: [{ ordem: 'asc' }, { name: 'asc' }],
       },
     },
-    orderBy: [{ createdAt: 'asc' }, { name: 'asc' }],
+    orderBy: [{ ordem: 'asc' }, { name: 'asc' }],
   })
   const byId = new Map(rows.map((row) => [row.id, row]))
   return rows.map((row) => {
@@ -53,6 +53,7 @@ export async function listAccountPlan(userId: string) {
       icon: row.icon,
       color: row.color,
       allowedUnits: row.allowedUnits,
+      ordem: row.ordem,
       active: row.active,
       level: path.length - 1,
       path,
@@ -65,6 +66,7 @@ export async function listAccountPlan(userId: string) {
         name: account.name,
         type: account.type,
         categoryId: account.categoryId,
+        ordem: account.ordem,
         active: account.active,
         createdAt: account.createdAt.toISOString(),
         itemCount: account._count.items,
@@ -73,7 +75,16 @@ export async function listAccountPlan(userId: string) {
         productActive: account.product.active,
       })),
     }
-  }).sort((a, b) => a.path.join(' / ').localeCompare(b.path.join(' / '), 'pt-BR'))
+  }).sort((a, b) => {
+    // Sort by tree position: compare path segments pairwise using ordem
+    const aPath = a.path
+    const bPath = b.path
+    const minLen = Math.min(aPath.length, bPath.length)
+    for (let i = 0; i < minLen; i++) {
+      if (aPath[i] !== bPath[i]) return aPath[i].localeCompare(bPath[i], 'pt-BR')
+    }
+    return aPath.length - bPath.length
+  })
 }
 
 async function validateParent(userId: string, parentId: string | null | undefined, currentId?: string) {
@@ -91,21 +102,44 @@ async function validateParent(userId: string, parentId: string | null | undefine
   return parent
 }
 
-export async function createAccountCategory(userId: string, input: { name: string; icon: string; color: string; parentId?: string | null; allowedUnits: string[]; active?: boolean }) {
+export async function createAccountCategory(userId: string, input: {
+  name: string; icon: string; color: string; parentId?: string | null
+  allowedUnits: string[]; active?: boolean; ordem?: number
+}) {
   await validateParent(userId, input.parentId)
   const duplicate = await prisma.category.findFirst({ where: { userId, name: { equals: input.name, mode: 'insensitive' } }, select: { id: true } })
   if (duplicate) throw new AccountPlanError('Já existe uma classificação com esse nome.', 409)
+
+  let ordem = input.ordem ?? 0
+  if (input.ordem === undefined) {
+    // Place at the end of siblings
+    const maxOrdem = await prisma.category.aggregate({
+      where: { userId, parentId: input.parentId || null },
+      _max: { ordem: true },
+    })
+    ordem = (maxOrdem._max.ordem ?? -1) + 1
+  }
+
   return prisma.category.create({
-    data: { userId, name: input.name, icon: input.icon, color: input.color, parentId: input.parentId || null, allowedUnits: input.allowedUnits, active: input.active ?? true },
+    data: {
+      userId, name: input.name, icon: input.icon, color: input.color,
+      parentId: input.parentId || null, allowedUnits: input.allowedUnits,
+      active: input.active ?? true, ordem,
+    },
   })
 }
 
-export async function updateAccountCategory(userId: string, categoryId: string, input: { name?: string; icon?: string; color?: string; parentId?: string | null; allowedUnits?: string[]; active?: boolean }) {
+export async function updateAccountCategory(userId: string, categoryId: string, input: {
+  name?: string; icon?: string; color?: string; parentId?: string | null
+  allowedUnits?: string[]; active?: boolean; ordem?: number
+}) {
   const current = await prisma.category.findFirst({ where: { id: categoryId, userId }, select: { id: true } })
   if (!current) throw new AccountPlanError('Classificação não encontrada.', 404)
   if (input.parentId !== undefined) await validateParent(userId, input.parentId, categoryId)
   if (input.name) {
-    const duplicate = await prisma.category.findFirst({ where: { userId, id: { not: categoryId }, name: { equals: input.name, mode: 'insensitive' } }, select: { id: true } })
+    const duplicate = await prisma.category.findFirst({
+      where: { userId, id: { not: categoryId }, name: { equals: input.name, mode: 'insensitive' } }, select: { id: true }
+    })
     if (duplicate) throw new AccountPlanError('Já existe uma classificação com esse nome.', 409)
   }
   return prisma.category.update({ where: { id: categoryId }, data: input })
@@ -122,4 +156,85 @@ export async function deleteAccountCategory(userId: string, categoryId: string) 
   }
   await prisma.category.delete({ where: { id: categoryId } })
   return { deleted: true }
+}
+
+export async function reorderAccountPlan(userId: string, input: {
+  categories?: Array<{ id: string; ordem: number; parentId?: string | null }>
+  accounts?: Array<{ id: string; ordem: number }>
+}) {
+  const ops: Promise<unknown>[] = []
+
+  if (input.categories?.length) {
+    // Validate all belong to user
+    const ids = input.categories.map((c) => c.id)
+    const found = await prisma.category.findMany({ where: { id: { in: ids }, userId }, select: { id: true } })
+    const foundIds = new Set(found.map((c) => c.id))
+    for (const c of input.categories) {
+      if (!foundIds.has(c.id)) throw new AccountPlanError(`Classificação ${c.id} não encontrada.`, 404)
+    }
+    // Validate no cycles for parentId changes
+    for (const c of input.categories) {
+      if (c.parentId !== undefined) await validateParent(userId, c.parentId, c.id)
+    }
+    for (const c of input.categories) {
+      const data: { ordem: number; parentId?: string | null } = { ordem: c.ordem }
+      if (c.parentId !== undefined) data.parentId = c.parentId
+      ops.push(prisma.category.update({ where: { id: c.id }, data }))
+    }
+  }
+
+  if (input.accounts?.length) {
+    const ids = input.accounts.map((a) => a.id)
+    const found = await prisma.productAccount.findMany({ where: { id: { in: ids }, userId }, select: { id: true } })
+    const foundIds = new Set(found.map((a) => a.id))
+    for (const a of input.accounts) {
+      if (!foundIds.has(a.id)) throw new AccountPlanError(`Conta ${a.id} não encontrada.`, 404)
+    }
+    for (const a of input.accounts) {
+      ops.push(prisma.productAccount.update({ where: { id: a.id }, data: { ordem: a.ordem } }))
+    }
+  }
+
+  await Promise.all(ops)
+  return { ok: true }
+}
+
+export async function moveProductAccount(userId: string, accountId: string, targetCategoryId: string) {
+  const account = await prisma.productAccount.findFirst({
+    where: { id: accountId, userId },
+    include: { product: true },
+  })
+  if (!account) throw new AccountPlanError('Conta não encontrada.', 404)
+
+  const targetCategory = await prisma.category.findFirst({
+    where: { id: targetCategoryId, userId, active: true },
+    select: { id: true, allowedUnits: true },
+  })
+  if (!targetCategory) throw new AccountPlanError('Classificação de destino não encontrada ou desativada.', 404)
+
+  if (!targetCategory.allowedUnits.includes(account.product.defaultUnit)) {
+    throw new AccountPlanError(
+      `A unidade "${account.product.defaultUnit}" não está habilitada na classificação de destino.`
+    )
+  }
+
+  // Compute new ordem (end of target category)
+  const maxOrdem = await prisma.productAccount.aggregate({
+    where: { userId, categoryId: targetCategoryId },
+    _max: { ordem: true },
+  })
+  const ordem = (maxOrdem._max.ordem ?? -1) + 1
+
+  // Update product categoryId → trigger will sync ProductAccount.categoryId automatically
+  await prisma.product.update({
+    where: { id: account.productId },
+    data: { categoryId: targetCategoryId },
+  })
+  // Also update ordem manually (trigger doesn't set it)
+  await prisma.productAccount.update({
+    where: { id: accountId },
+    data: { ordem },
+  })
+
+  return { ok: true }
 }

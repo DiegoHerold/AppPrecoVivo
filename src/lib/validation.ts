@@ -65,10 +65,29 @@ export const accountCategorySchema = z.object({
   parentId: z.string().trim().nullable().optional(),
   allowedUnits: z.array(z.enum(measureUnitValues)).min(1, 'Escolha ao menos uma unidade de medida.'),
   active: z.boolean().optional(),
+  ordem: z.number().int().min(0).optional(),
 })
 
 export const accountCategoryUpdateSchema = accountCategorySchema.partial().refine((value) => Object.keys(value).length > 0, {
   message: 'Informe ao menos uma alteração.',
+})
+
+export const accountPlanReorderSchema = z.object({
+  categories: z.array(z.object({
+    id: z.string().min(1),
+    ordem: z.number().int().min(0),
+    parentId: z.string().trim().nullable().optional(),
+  })).optional(),
+  accounts: z.array(z.object({
+    id: z.string().min(1),
+    ordem: z.number().int().min(0),
+  })).optional(),
+}).refine((v) => (v.categories?.length ?? 0) + (v.accounts?.length ?? 0) > 0, {
+  message: 'Informe ao menos um item para reordenar.',
+})
+
+export const moveProductAccountSchema = z.object({
+  categoryId: z.string().min(1, 'Escolha a classificação de destino.'),
 })
 
 export const purchaseItemSchema = z.object({
