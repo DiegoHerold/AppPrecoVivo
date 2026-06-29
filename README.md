@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Fluxo de Compras
 
-## Getting Started
+Aplicação web mobile-first para registrar compras reais e explicar a diferença entre desembolso, consumo estimado e estoque. O projeto não cria compras fictícias: uma conta nova começa vazia e todo item exibido vem do PostgreSQL.
 
-First, run the development server:
+## Stack
+
+- Next.js 16 com App Router e TypeScript
+- React 19, Tailwind CSS 4 e React Hook Form
+- PostgreSQL 18, Prisma 7 e Zod
+- PWA instalável com manifesto, ícones, service worker e página offline
+- Autenticação própria com senha em hash, sessão persistida no banco e cookie HTTP-only
+- Perfil editável, troca de senha e preferências persistidas por usuário
+- Câmera real via getUserMedia, com escolha frontal/traseira e alternativa por arquivo
+
+## Executar localmente
+
+1. Crie um banco PostgreSQL chamado `fluxo_compras`.
+2. Copie `.env.example` para `.env` e ajuste `DATABASE_URL` e `SESSION_SECRET`.
+3. Instale, migre e inicialize o plano de categorias:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run db:migrate
+npm run db:seed
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Inicie aceitando conexões da rede local:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run dev:lan
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+No celular conectado ao mesmo Wi-Fi, abra `http://IP-DO-COMPUTADOR:5174`. Nesta máquina, o endereço atual é `http://192.168.1.35:5174`. O IP pode mudar ao reconectar no Wi-Fi; use `ipconfig` para conferir o endereço IPv4 atual.
 
-## Learn More
+O seed cria somente uma conta local de desenvolvimento e seu plano de categorias. Ele não cria compras, produtos, preços ou análises falsas. Cadastros de usuários também recebem seu próprio plano de categorias automaticamente.
 
-To learn more about Next.js, take a look at the following resources:
+## Entradas de compra
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Cadastro manual: persiste compra e itens imediatamente.
+- Texto colado: aceita linhas no formato `produto | quantidade | unidade | preço unitário | categoria | comportamento`.
+- Chave, URL ou imagem: identifica o QR Code, valida a chave, consulta a NFC-e oficial e impede importações duplicadas. Quando a leitura falha, permite tentar outra foto, digitar a chave ou cadastrar manualmente sem criar uma compra vazia.
+- PDF: mantém a tarefa de recuperação manual; nenhum dado fiscal é inventado.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Fotos capturadas e arquivos enviados são validados (tipo e limite de 10 MB), gravados em storage/uploads e servidos somente para o usuário autenticado. Em produção, monte esse diretório em volume persistente ou substitua-o por armazenamento de objetos.
 
-## Deploy on Vercel
+## Plano de contas e relatórios
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Em Produtos → Plano de contas, cada usuário pode criar, renomear, mover, colorir, desativar e excluir classificações vazias em qualquer profundidade. Classificações com produtos, subníveis ou histórico devem ser desativadas para preservar os vínculos.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+O relatório de fluxo usa a mesma árvore. A trilha começa em Tudo e permite navegar por cada nível; cartões, gráfico de seis meses, consumo, estoque, composição e produtos são recalculados para a classificação escolhida e todos os seus descendentes.
+
+## Câmera
+
+O navegador só libera a câmera em contexto seguro. O acesso pelo IP em `http://192.168.1.35:5174` abre o app no celular, mas alguns navegadores bloquearão `getUserMedia` por não ser HTTPS. Nesse caso, use “Escolher foto”; em ambiente publicado, use HTTPS para liberar a câmera ao vivo.
+
+## Verificação
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+As regras de normalização, similaridade, comportamento, duração, consumo mensal, fluxo e detecção de desvios ficam em `src/lib/domain.ts`, fora dos componentes visuais.

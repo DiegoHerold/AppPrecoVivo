@@ -1,0 +1,312 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum StoreType {
+  mercado
+  farmacia
+  pet_shop
+  padaria
+  atacado
+  conveniencia
+  loja
+  outro
+}
+
+enum BehaviorType {
+  recorrente_semanal
+  recorrente_mensal
+  estoque
+  pontual
+  sazonal
+  emergencia
+  fora_do_padrao
+}
+
+enum ImportStatus {
+  aguardando_importacao
+  importando
+  importada
+  erro_importacao
+  importacao_manual
+}
+
+enum ReviewStatus {
+  sem_revisao
+  aguardando_revisao
+  revisada
+  concluida
+}
+
+enum ImportInputType {
+  image
+  pdf
+  access_key
+  nfce_url
+  qr_code_url
+  raw_text
+  manual
+}
+
+enum JobStatus {
+  pendente
+  processando
+  concluida
+  erro
+  requer_acao_manual
+}
+
+enum InsightType {
+  estoque
+  quantidade
+  preco
+  pontual
+  categoria
+  fora_do_padrao
+}
+
+enum ThemePreference {
+  system
+  light
+  dark
+}
+
+enum CameraFacingMode {
+  environment
+  user
+}
+
+model User {
+  id              String           @id @default(cuid())
+  name            String
+  email           String           @unique
+  passwordHash    String
+  phone           String?
+  city            String?
+  state           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  sessions        Session[]
+  categories      Category[]
+  products        Product[]
+  purchases       Purchase[]
+  importJobs      ImportJob[]
+  monthlyFlows    MonthlyFlow[]
+  monthlyInsights MonthlyInsight[]
+  settings        UserSettings?
+  uploadedFiles   UploadedFile[]
+}
+
+model UserSettings {
+  id                     String           @id @default(cuid())
+  userId                 String           @unique
+  theme                  ThemePreference  @default(system)
+  cameraFacingMode       CameraFacingMode @default(environment)
+  notificationsEnabled   Boolean          @default(true)
+  monthlySummaryEnabled  Boolean          @default(true)
+  priceAlertsEnabled     Boolean          @default(true)
+  compactMode            Boolean          @default(false)
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+  user                   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UploadedFile {
+  id           String   @id @default(cuid())
+  userId       String
+  originalName String
+  mimeType     String
+  size         Int
+  storagePath  String   @unique
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Store {
+  id        String     @id @default(cuid())
+  name      String
+  type      StoreType
+  document  String?
+  city      String?
+  state     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  purchases Purchase[]
+
+  @@index([name, type])
+  @@index([document])
+}
+
+model Category {
+  id        String         @id @default(cuid())
+  userId    String
+  parentId  String?
+  name      String
+  icon      String
+  color     String
+  allowedUnits String[]       @default(["un", "pct", "cx"])
+  active    Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent    Category?      @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Category[]     @relation("CategoryTree")
+  products  Product[]
+  items     PurchaseItem[]
+
+  @@unique([userId, name])
+  @@index([userId, active])
+}
+
+model Product {
+  id                      String         @id @default(cuid())
+  userId                  String
+  standardName            String
+  brand                   String?
+  categoryId              String
+  behaviorType            BehaviorType
+  estimatedDurationMonths Decimal        @db.Decimal(6, 2)
+  defaultUnit             String
+  packageSize             String?
+  classificationConfirmed Boolean       @default(false)
+  active                  Boolean        @default(true)
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+  user                    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category                Category       @relation(fields: [categoryId], references: [id])
+  aliases                 ProductAlias[]
+  items                   PurchaseItem[]
+
+  @@unique([userId, standardName])
+  @@index([userId, categoryId])
+}
+
+model ProductAlias {
+  id                  String   @id @default(cuid())
+  productId           String
+  aliasName           String
+  normalizedAliasName String
+  source              String
+  createdAt           DateTime @default(now())
+  product             Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, normalizedAliasName])
+  @@index([normalizedAliasName])
+}
+
+model Purchase {
+  id           String         @id @default(cuid())
+  userId       String
+  storeId      String?
+  accessKey    String?
+  nfceUrl      String?
+  purchaseDate DateTime
+  totalAmount  Decimal        @db.Decimal(12, 2)
+  importStatus ImportStatus
+  reviewStatus ReviewStatus
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store        Store?         @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  items        PurchaseItem[]
+  importJobs   ImportJob[]
+
+  @@index([userId, purchaseDate])
+  @@unique([userId, accessKey])
+}
+
+model PurchaseItem {
+  id                      String       @id @default(cuid())
+  purchaseId              String
+  rawName                 String
+  normalizedName          String
+  productId               String?
+  quantity                Decimal      @db.Decimal(10, 3)
+  unit                    String
+  unitPrice               Decimal      @db.Decimal(12, 2)
+  totalPrice              Decimal      @db.Decimal(12, 2)
+  categoryId              String
+  behaviorType            BehaviorType
+  estimatedDurationMonths Decimal      @db.Decimal(6, 2)
+  matchConfidence         Decimal      @db.Decimal(5, 4)
+  needsReview             Boolean      @default(false)
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+  purchase                Purchase     @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product                 Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  category                Category     @relation(fields: [categoryId], references: [id])
+
+  @@index([purchaseId])
+  @@index([productId])
+  @@index([needsReview])
+}
+
+model ImportJob {
+  id           String          @id @default(cuid())
+  userId       String
+  purchaseId   String?
+  inputType    ImportInputType
+  inputValue   String?
+  fileUrl      String?
+  status       JobStatus
+  errorMessage String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purchase     Purchase?       @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+model MonthlyFlow {
+  id                     String   @id @default(cuid())
+  userId                 String
+  month                  Int
+  year                   Int
+  totalSpent             Decimal  @db.Decimal(12, 2)
+  estimatedConsumption   Decimal  @db.Decimal(12, 2)
+  stockAmount            Decimal  @db.Decimal(12, 2)
+  recurringAmount        Decimal  @db.Decimal(12, 2)
+  punctualAmount         Decimal  @db.Decimal(12, 2)
+  priceIncreaseAmount    Decimal  @db.Decimal(12, 2)
+  quantityIncreaseAmount Decimal  @db.Decimal(12, 2)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, month, year])
+  @@index([userId, year, month])
+}
+
+model MonthlyInsight {
+  id          String      @id @default(cuid())
+  userId      String
+  month       Int
+  year        Int
+  type        InsightType
+  title       String
+  description String
+  amount      Decimal     @db.Decimal(12, 2)
+  createdAt   DateTime    @default(now())
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, year, month])
+}
