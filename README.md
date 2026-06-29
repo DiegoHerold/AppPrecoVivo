@@ -2,6 +2,7 @@
 
 Aplicação web mobile-first para registrar compras reais e explicar a diferença entre desembolso, consumo estimado e estoque. O projeto não cria compras fictícias: uma conta nova começa vazia e todo item exibido vem do PostgreSQL.
 
+
 ## Stack
 
 - Next.js 16 com App Router e TypeScript
