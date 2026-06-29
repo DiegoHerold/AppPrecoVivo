@@ -10,6 +10,13 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // Para migrações, prefira a conexão DIRETA (não-pooled). Aceita os nomes
+    // que a Vercel/Neon costuma injetar, evitando "datasource.url is required".
+    url:
+      process.env["DATABASE_URL_UNPOOLED"] ??
+      process.env["POSTGRES_URL_NON_POOLING"] ??
+      process.env["DATABASE_URL"] ??
+      process.env["POSTGRES_PRISMA_URL"] ??
+      process.env["POSTGRES_URL"],
   },
 });
