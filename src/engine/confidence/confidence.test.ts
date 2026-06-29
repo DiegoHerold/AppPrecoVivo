@@ -37,6 +37,25 @@ test('variação alta domina e marca instavel', () => {
   )
 })
 
+test('unidades incompatíveis reduzem a confiança da previsão', () => {
+  assert.equal(
+    classifyConfidence({
+      purchaseCount: 12,
+      intervalCoefficientOfVariation: 0.1,
+      compatiblePurchaseRatio: 0.9,
+    }),
+    'baixa',
+  )
+  assert.equal(
+    classifyConfidence({
+      purchaseCount: 12,
+      intervalCoefficientOfVariation: 0.1,
+      compatiblePurchaseRatio: 0.5,
+    }),
+    'instavel',
+  )
+})
+
 test('formatEstimate produz texto honesto em pt-BR', () => {
   assert.equal(formatEstimate(2.34, 'kg'), 'aproximadamente 2,3 kg')
 })

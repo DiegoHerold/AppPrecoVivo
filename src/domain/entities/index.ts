@@ -8,6 +8,7 @@
 import type {
   ConfidenceLevel,
   InferenceEventType,
+  ProductBehavior,
   SeriesStats,
   StockStatus,
   TrendDirection,
@@ -18,7 +19,10 @@ import type {
  * do produto quando possível. Representa o histórico ORIGINAL e imutável.
  */
 export interface PurchaseRecord {
+  /** Identificador da linha original da compra. */
   id: string
+  /** Identificador da compra/importação que contém esta linha. */
+  purchaseId: string
   productId: string
   date: Date
   /** Quantidade já convertida para a unidade padrão do produto (quando deu). */
@@ -46,6 +50,7 @@ export interface ProductInput {
   normalizedName: string
   category: string | null
   standardUnit: string
+  behaviorType: ProductBehavior
 }
 
 /**
@@ -58,7 +63,11 @@ export interface InferenceEvent {
   /** Compra associada ao evento, se houver. */
   purchaseId: string | null
   date: Date
-  /** Mensagem honesta para a interface. */
+  /** Título e textos explicáveis, prontos para apresentação. */
+  title: string
+  description: string
+  impact: string
+  /** Alias legado da descrição. */
   message: string
   confidence: ConfidenceLevel
   /** Dados auxiliares calculados (dias de antecedência, falta etc.). */
@@ -75,6 +84,8 @@ export interface ConsumptionMetrics {
   quantityStats: SeriesStats
   /** Estatísticas dos intervalos entre compras (em dias). */
   intervalStats: SeriesStats
+  /** Estatísticas das taxas estimadas por ciclo (unidade/dia). */
+  rateStats: SeriesStats
   /** Intervalo médio entre compras (dias). */
   averagePurchaseInterval: number | null
   /** Intervalo médio entre reposições efetivas (dias). */
@@ -112,6 +123,8 @@ export interface ProductInference {
   inventory: InventoryState
   confidence: ConfidenceLevel
   purchaseCount: number
+  /** Compras com unidade compatível usadas nos cálculos físicos. */
+  usablePurchaseCount: number
   refillCount: number
   lastPurchaseDate: Date | null
   averagePrice: number | null

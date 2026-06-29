@@ -6,9 +6,10 @@
  * produto acabou. Por isso o consumo é estimado pela quantidade reposta ao
  * longo do tempo decorrido, e não por "estoque zerou na data da recompra".
  *
- * Modelo: consumo diário ≈ (quantidade total consumível) / (tempo decorrido).
- * Excluímos a última compra do numerador porque ela ainda não foi consumida
- * (vira estoque). Assim "reposição" e "consumo" nunca se confundem.
+ * Modelo: cada intervalo produz uma taxa observada (quantidade anterior / dias
+ * até a próxima compra). A taxa final é uma média robusta dessas observações:
+ * mediana como centro e descarte de extremos. Isso evita que uma compra
+ * antecipada ou uma única compra volumosa altere drasticamente a previsão.
  */
 
 import type { ConsumptionMetrics } from '../../domain/entities'
@@ -19,6 +20,7 @@ import {
   intervalsInDays,
   linearTrendSlope,
   mean,
+  median,
   purchasesPerMonth,
   seasonalityByMonth,
 } from '../statistics'
@@ -33,6 +35,34 @@ export interface ConsumptionSample {
 
 /** Limiar de inclinação relativa para considerar tendência (não-ruído). */
 const TREND_RELATIVE_THRESHOLD = 0.05
+
+/** Remove extremos grosseiros sem pressupor uma categoria ou produto. */
+export function robustValues(values: number[]): number[] {
+  const positive = values.filter((value) => Number.isFinite(value) && value > 0)
+  if (positive.length < 3) return positive
+  const center = median(positive)
+  if (center === null || center <= 0) return positive
+  const filtered = positive.filter(
+    (value) => value >= center * 0.35 && value <= center * 2.5,
+  )
+  return filtered.length >= 2 ? filtered : positive
+}
+
+/** Taxas estimadas por ciclo. A compra atual nunca entra como consumo imediato. */
+export function cycleConsumptionRates(samples: ConsumptionSample[]): number[] {
+  const sorted = [...samples].sort((a, b) => a.date.getTime() - b.date.getTime())
+  const rates: number[] = []
+  for (let index = 1; index < sorted.length; index += 1) {
+    const elapsed = daysBetween(sorted[index].date, sorted[index - 1].date)
+    const previousQuantity = sorted[index - 1].quantity
+    if (elapsed > 0 && previousQuantity > 0) rates.push(previousQuantity / elapsed)
+  }
+  return rates
+}
+
+export function estimateDailyConsumption(samples: ConsumptionSample[]): number | null {
+  return mean(robustValues(cycleConsumptionRates(samples)))
+}
 
 /**
  * Detecta tendência de consumo a partir das quantidades por compra, usando a
@@ -50,6 +80,11 @@ export function detectQuantityTrend(quantities: number[]): TrendDirection {
   return 'estavel'
 }
 
+/** Tendência do consumo inferido, não da quantidade da compra atual. */
+export function detectConsumptionTrend(rates: number[]): TrendDirection {
+  return detectQuantityTrend(robustValues(rates))
+}
+
 /**
  * Calcula as métricas de consumo. Funciona mesmo com poucos dados:
  * - 0 ou 1 compra: sem consumo estimável (null), confiança tratada fora.
@@ -63,25 +98,15 @@ export function computeConsumption(
   const quantities = sorted.map((s) => s.quantity)
   const dates = sorted.map((s) => s.date)
   const intervals = intervalsInDays(dates)
+  const rates = cycleConsumptionRates(sorted)
 
   const quantityStats = describe(quantities)
   const intervalStats = describe(intervals)
+  const rateStats = describe(rates)
   const averagePurchaseInterval = mean(intervals)
-
-  let dailyAverage: number | null = null
-  if (sorted.length >= 2) {
-    const elapsedDays = daysBetween(
-      sorted[sorted.length - 1].date,
-      sorted[0].date,
-    )
-    // Quantidade já consumível = tudo menos a última compra (ainda em estoque).
-    const consumable = quantities
-      .slice(0, -1)
-      .reduce((sum, q) => sum + q, 0)
-    if (elapsedDays > 0 && consumable > 0) {
-      dailyAverage = consumable / elapsedDays
-    }
-  }
+  const refillIntervals = robustValues(intervals)
+  const averageRefillInterval = median(refillIntervals)
+  const dailyAverage = estimateDailyConsumption(sorted)
 
   const monthlyAverage =
     dailyAverage === null ? null : dailyAverage * DAYS_PER_MONTH
@@ -91,12 +116,11 @@ export function computeConsumption(
     monthlyAverage,
     quantityStats,
     intervalStats,
+    rateStats,
     averagePurchaseInterval,
-    // Reposição efetiva = mesmo conjunto de intervalos aqui; mantido separado
-    // semanticamente para evolução futura (ex.: ignorar compras antecipadas).
-    averageRefillInterval: averagePurchaseInterval,
-    purchaseFrequencyPerMonth: purchasesPerMonth(averagePurchaseInterval),
-    trend: detectQuantityTrend(quantities),
+    averageRefillInterval,
+    purchaseFrequencyPerMonth: purchasesPerMonth(averageRefillInterval),
+    trend: detectConsumptionTrend(rates),
     seasonalityByMonth: seasonalityByMonth(sorted),
   }
 }

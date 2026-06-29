@@ -1,13 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { Camera, FileText, Image as ImageIcon, Keyboard, Link2, QrCode, Upload, X, Zap } from 'lucide-react'
+import { Camera, ChevronRight, FileText, Image as ImageIcon, Keyboard, Link2, PackagePlus, Upload } from 'lucide-react'
 import { clientApi, localDate } from '@/lib/client-api'
 import type { AppScreen } from '@/lib/client-types'
 import { CameraCapture } from './camera-capture'
 import { PageHeader, PrimaryButton } from './ui'
 
-type Mode = 'scan' | 'camera' | 'key' | 'url' | 'file'
+type Mode = 'camera' | 'options' | 'key' | 'url' | 'file'
 type InputType = 'image' | 'pdf' | 'access_key' | 'nfce_url'
 type ImportResponse = {
   id: string | null
@@ -27,7 +27,7 @@ export function AddNoteScreen({ navigate, onBack, cameraFacingMode, created }: {
   cameraFacingMode: 'environment' | 'user'
   created: (id: string) => void
 }) {
-  const [mode, setMode] = useState<Mode>('scan')
+  const [mode, setMode] = useState<Mode>('camera')
   const [input, setInput] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [message, setMessage] = useState('')
@@ -99,29 +99,38 @@ export function AddNoteScreen({ navigate, onBack, cameraFacingMode, created }: {
   if (mode === 'camera') {
     return <CameraCapture
       initialFacingMode={cameraFacingMode}
-      onBack={() => changeMode('scan')}
+      onBack={onBack}
       chooseFile={() => changeMode('file')}
       submitPhoto={submitPhoto}
       openManual={() => navigate('manual')}
+      openKey={() => changeMode('key')}
+      openOptions={() => changeMode('options')}
     />
   }
 
-  if (mode === 'scan') {
+  if (mode === 'options') {
     const options = [
-      { mode: 'camera' as const, label: 'Câmera', icon: QrCode },
-      { mode: 'key' as const, label: 'Chave', icon: Keyboard },
-      { mode: 'url' as const, label: 'URL', icon: Link2 },
-      { mode: 'file' as const, label: 'Arquivo', icon: Upload },
+      { action: () => changeMode('key'), label: 'Digitar chave', detail: 'Informe os 44 dígitos da NFC-e.', icon: Keyboard, tone: 'bg-indigo-50 text-indigo-700' },
+      { action: () => changeMode('file'), label: 'Escolher foto ou PDF', detail: 'Use um arquivo salvo no aparelho.', icon: Upload, tone: 'bg-cyan-50 text-cyan-700' },
+      { action: () => changeMode('url'), label: 'Colar URL da NFC-e', detail: 'Cole o endereço do portal da nota.', icon: Link2, tone: 'bg-violet-50 text-violet-700' },
+      { action: () => navigate('text'), label: 'Colar lista de produtos', detail: 'Uma linha para cada item comprado.', icon: FileText, tone: 'bg-amber-50 text-amber-700' },
+      { action: () => navigate('manual'), label: 'Cadastrar compra manualmente', detail: 'Informe estabelecimento, produtos e preços.', icon: PackagePlus, tone: 'bg-emerald-50 text-emerald-700' },
     ]
-    return <div className="flex h-full flex-col bg-[#08080B] text-white">
-      <div className="flex h-14 items-center justify-between border-b border-white/10 px-4"><button aria-label="Fechar" onClick={onBack} className="grid h-8 w-8 place-items-center rounded-full bg-white/10"><X size={17} /></button><strong className="text-[11px]">Escanear nota</strong><span className="w-8" /></div>
-      <div className="scanner-grid relative flex flex-1 flex-col items-center justify-center overflow-hidden bg-[linear-gradient(180deg,#0A0A0E,#131426_72%,#08080B)]"><div className="scan-frame relative h-48 w-64"><i /><i /><i /><i /><span /></div><QrCode size={62} className="absolute text-white/10" /><p className="mt-14 flex items-center gap-1 text-[9px] font-bold"><Zap size={13} className="text-indigo-400" /> Aponte para o QR Code ou chave da nota</p><small className="mt-1 text-[7px] text-white/30">O código pode estar inclinado ou fora do centro</small><button aria-label="Abrir câmera" onClick={() => changeMode('camera')} className="mt-10 h-17 w-17 rounded-full border-3 border-white p-1.5"><span className="block h-full w-full rounded-full bg-slate-200" /></button><button onClick={() => changeMode('key')} className="mt-5 flex items-center gap-1 border-b border-white/20 py-1 text-[8px] text-white/55"><Keyboard size={13} /> Digitar chave manualmente</button></div>
-      <div className="grid h-20 grid-cols-4 border-t border-white/10 bg-[#08080B] px-2 pb-4 pt-2">{options.map((item) => { const Icon = item.icon; return <button key={item.mode} onClick={() => changeMode(item.mode)} className="flex flex-col items-center gap-1 text-[7px] text-white/40"><Icon size={17} />{item.label}</button> })}</div>
+    return <div className="px-4 pb-8 md:px-6">
+      <PageHeader title="Adicionar compra" subtitle="Escolha a forma mais prática agora" onBack={onBack} />
+      <button onClick={() => changeMode('camera')} className="mt-5 flex min-h-24 w-full items-center gap-4 rounded-3xl bg-[linear-gradient(145deg,#3730A3,#635BFF)] p-5 text-left text-white shadow-[0_10px_28px_rgba(67,56,202,.24)]">
+        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/15"><Camera size={27} /></span>
+        <span className="min-w-0 flex-1"><strong className="block text-xl">Abrir câmera</strong><small className="mt-1 block text-sm leading-5 text-white/75">Fotografe o QR Code ou a nota inteira.</small></span>
+        <ChevronRight size={22} />
+      </button>
+      <section className="mt-7"><h2 className="text-xl font-bold tracking-tight text-slate-950">Outras formas de adicionar</h2><p className="mt-1 text-sm leading-6 text-slate-600">Use estas opções quando não puder fotografar a nota.</p>
+        <div className="mt-4 grid gap-3">{options.map((option) => { const Icon = option.icon; return <button key={option.label} onClick={option.action} className="flex min-h-20 w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm active:scale-[.99]"><span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${option.tone}`}><Icon size={21} /></span><span className="min-w-0 flex-1"><strong className="block text-base text-slate-950">{option.label}</strong><small className="mt-1 block text-sm leading-5 text-slate-600">{option.detail}</small></span><ChevronRight className="shrink-0 text-slate-400" size={20} /></button> })}</div>
+      </section>
     </div>
   }
 
   return <div className="px-4 pb-8">
-    <PageHeader title={mode === 'key' ? 'Digitar chave' : mode === 'url' ? 'Colar URL da NFC-e' : 'Enviar arquivo'} subtitle="Consulta oficial e importação dos itens" onBack={() => changeMode('scan')} />
+    <PageHeader title={mode === 'key' ? 'Digitar chave' : mode === 'url' ? 'Colar URL da NFC-e' : 'Enviar arquivo'} subtitle="Consulta oficial e importação dos itens" onBack={() => changeMode('options')} />
     <div className="mb-4 rounded-xl bg-emerald-50 p-3 text-[9px] leading-4 text-emerald-800"><strong>Importação real da NFC-e.</strong><p>O QR Code ou a chave é validado e consultado no portal oficial. Nada é inventado quando a consulta não responde.</p></div>
     {mode === 'key' && <label className="form-label">Chave de acesso<input value={input} onChange={(event) => { setInput(event.target.value.replace(/\D/g, '').slice(0, 44)); setMessage(''); setLastResult(null) }} className="form-input" inputMode="numeric" placeholder="44 dígitos" /><small className="text-right text-[8px] text-slate-400">{input.length}/44</small></label>}
     {mode === 'url' && <label className="form-label">URL da nota<input value={input} onChange={(event) => { setInput(event.target.value); setMessage(''); setLastResult(null) }} className="form-input" type="url" placeholder="https://…" /></label>}

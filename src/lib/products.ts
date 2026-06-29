@@ -2,6 +2,7 @@ import type { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { recalculatePurchaseMonth } from '@/lib/monthly-flow'
 import { getProductDetail } from '@/lib/queries'
+import { syncInferenceEventsForUser } from '@/services/inference-events.service'
 import type { productUpdateSchema } from '@/lib/validation'
 
 type ProductUpdateInput = z.infer<typeof productUpdateSchema>
@@ -74,6 +75,8 @@ export async function updateProduct(userId: string, productId: string, input: Pr
     for (const date of months.values()) await recalculatePurchaseMonth(userId, date)
   }
 
+  await syncInferenceEventsForUser(userId)
+
   return getProductDetail(userId, productId)
 }
 
@@ -89,6 +92,8 @@ export async function deactivateProduct(userId: string, productId: string) {
     await tx.product.update({ where: { id: productId }, data: { active: false } })
     await tx.planoConta.update({ where: { id: product.node!.id }, data: { ativo: false } })
   })
+
+  await syncInferenceEventsForUser(userId)
 
   return { id: productId, active: false, accountId: product.node.id, accountActive: false }
 }

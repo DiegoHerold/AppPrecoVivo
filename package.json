@@ -15,6 +15,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
+    "db:inference": "node --conditions=react-server --import tsx prisma/backfill-inference-events.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

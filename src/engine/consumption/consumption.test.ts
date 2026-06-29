@@ -1,6 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { computeConsumption, detectQuantityTrend } from './index'
+import {
+  computeConsumption,
+  detectConsumptionTrend,
+  detectQuantityTrend,
+} from './index'
 
 const D = (s: string) => new Date(`${s}T00:00:00.000Z`)
 
@@ -36,6 +40,23 @@ test('tendência de quantidade detecta aumento e queda', () => {
   assert.equal(detectQuantityTrend([1, 2, 3, 4, 5]), 'aumentando')
   assert.equal(detectQuantityTrend([5, 4, 3, 2, 1]), 'diminuindo')
   assert.equal(detectQuantityTrend([3, 3, 3]), 'estavel')
+})
+
+test('tendência de consumo usa taxas entre ciclos e ignora um extremo isolado', () => {
+  assert.equal(detectConsumptionTrend([1, 1.4, 1.8, 2.2]), 'aumentando')
+  assert.equal(detectConsumptionTrend([2.2, 1.8, 1.4, 1]), 'diminuindo')
+  assert.equal(detectConsumptionTrend([1, 1, 1, 8]), 'estavel')
+})
+
+test('compra antecipada isolada não distorce drasticamente o consumo médio', () => {
+  const metrics = computeConsumption([
+    { date: D('2026-01-01'), quantity: 1 },
+    { date: D('2026-02-01'), quantity: 1 },
+    { date: D('2026-03-01'), quantity: 1 },
+    { date: D('2026-03-11'), quantity: 1 },
+  ])
+  assert.ok(metrics.dailyAverage! > 0.03)
+  assert.ok(metrics.dailyAverage! < 0.04)
 })
 
 test('intervalo médio entre compras é calculado', () => {

@@ -103,6 +103,7 @@ model User {
   importJobs      ImportJob[]
   monthlyFlows    MonthlyFlow[]
   monthlyInsights MonthlyInsight[]
+  inferenceEvents InferenceEventLog[]
   settings        UserSettings?
   uploadedFiles   UploadedFile[]
 }
@@ -202,6 +203,7 @@ model Product {
   node                    PlanoConta?
   aliases                 ProductAlias[]
   items                   PurchaseItem[]
+  inferenceEvents         InferenceEventLog[]
 
   @@unique([userId, standardName])
   @@index([userId, active])
@@ -318,4 +320,26 @@ model MonthlyInsight {
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, year, month])
+}
+
+model InferenceEventLog {
+  id             String   @id @default(cuid())
+  userId         String
+  productId      String
+  eventKey       String
+  type           String
+  purchaseItemId String?
+  occurredAt     DateTime
+  title          String
+  description    String
+  impact         String
+  confidence     String
+  details        Json
+  calculatedAt   DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId, eventKey])
+  @@index([userId, occurredAt])
+  @@index([productId, occurredAt])
 }

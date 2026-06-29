@@ -32,19 +32,23 @@ export function inferProduct(params: InferProductParams): ProductInference {
   const sorted = [...purchases].sort(
     (a, b) => a.date.getTime() - b.date.getTime(),
   )
+  // Quantidades incompatíveis continuam no histórico e nos preços, mas não
+  // podem ser somadas fisicamente como se fossem da unidade padrão.
+  const usable = sorted.filter((purchase) => purchase.unitConverted)
 
   const consumption = computeConsumption(
-    sorted.map((p) => ({ date: p.date, quantity: p.quantity })),
+    usable.map((p) => ({ date: p.date, quantity: p.quantity })),
   )
 
   const confidence = classifyConfidence({
-    purchaseCount: sorted.length,
+    purchaseCount: usable.length,
     intervalCoefficientOfVariation:
       consumption.intervalStats.coefficientOfVariation,
+    compatiblePurchaseRatio: sorted.length ? usable.length / sorted.length : 1,
   })
 
   const inventory = computeInventory({
-    purchases: sorted.map((p) => ({ date: p.date, quantity: p.quantity })),
+    purchases: usable.map((p) => ({ date: p.date, quantity: p.quantity })),
     dailyConsumption: consumption.dailyAverage,
     unit: product.standardUnit,
     asOf,
@@ -52,10 +56,11 @@ export function inferProduct(params: InferProductParams): ProductInference {
 
   const purchaseEvents = detectPurchaseEvents({
     productId: product.id,
-    purchases: sorted.map((p) => ({ id: p.id, date: p.date, quantity: p.quantity })),
+    purchases: usable.map((p) => ({ id: p.id, date: p.date, quantity: p.quantity })),
     consumption,
     confidence,
     dailyConsumption: consumption.dailyAverage,
+    behaviorType: product.behaviorType,
   })
 
   const trendEvents = detectTrendEvents(product.id, consumption, confidence, asOf)
@@ -67,7 +72,7 @@ export function inferProduct(params: InferProductParams): ProductInference {
   const prices = sorted.map((p) => p.unitPrice).filter((value) => value > 0)
   // refillCount: ciclos de reposição = compras - 1 (nunca a mesma coisa que
   // o número de compras nem que consumo).
-  const refillCount = Math.max(0, sorted.length - 1)
+  const refillCount = Math.max(0, usable.length - 1)
 
   return {
     productId: product.id,
@@ -78,6 +83,7 @@ export function inferProduct(params: InferProductParams): ProductInference {
     inventory,
     confidence,
     purchaseCount: sorted.length,
+    usablePurchaseCount: usable.length,
     refillCount,
     lastPurchaseDate: sorted.length ? sorted[sorted.length - 1].date : null,
     averagePrice: prices.length ? mean(prices) : null,

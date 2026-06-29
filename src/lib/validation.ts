@@ -130,8 +130,10 @@ export const pendingImportSchema = z.object({
 })
 
 export const reviewSchema = z.object({
-  behaviorType: z.enum(behaviorValues),
-  estimatedDurationMonths: z.coerce.number().min(1).max(24),
+  // Omitidos por padrão: revisar nome/categoria não deve sobrescrever a
+  // recorrência já cadastrada. Só chegam quando o usuário edita esse bloco.
+  behaviorType: z.enum(behaviorValues).optional(),
+  estimatedDurationMonths: z.coerce.number().min(1).max(24).optional(),
   categoryId: z.string().min(1),
   standardName: z.string().trim().min(2),
 })

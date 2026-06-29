@@ -1,36 +1,39 @@
-/**
- * Repositório de eventos de inferência.
- *
- * Decisão de arquitetura: os eventos são uma camada DERIVADA e totalmente
- * reconstruível a partir do histórico imutável de compras. Por isso, nesta
- * etapa eles são CALCULADOS sob demanda pelo motor, não persistidos — o que
- * elimina o risco de divergência entre histórico e eventos e dispensa
- * migração destrutiva.
- *
- * A interface abaixo já está pronta para uma futura persistência (cache em
- * tabela própria): basta implementar `save`/`listByProduct` contra o Prisma
- * sem mudar o motor. Mantemos a assinatura estável de propósito.
- */
+/** Persistência de snapshots derivados. A fonte de verdade continua sendo Purchase. */
 
 import 'server-only'
 
+import type { Prisma } from '../generated/prisma/client'
 import type { InferenceEvent } from '../domain/entities'
+import { prisma } from '../lib/prisma'
 
-export interface InferenceEventsRepository {
-  /** Eventos calculados de um produto (ordenados do mais recente ao mais antigo). */
-  listByProduct(productId: string): Promise<InferenceEvent[]>
+export async function replaceInferenceEventsForUser(
+  userId: string,
+  events: InferenceEvent[],
+) {
+  await prisma.$transaction(async (tx) => {
+    await tx.inferenceEventLog.deleteMany({ where: { userId } })
+    if (!events.length) return
+    await tx.inferenceEventLog.createMany({
+      data: events.map((event) => ({
+        userId,
+        productId: event.productId,
+        eventKey: `${event.type}:${event.purchaseId ?? 'aggregate'}`,
+        type: event.type,
+        purchaseItemId: event.purchaseId,
+        occurredAt: event.date,
+        title: event.title,
+        description: event.description,
+        impact: event.impact,
+        confidence: event.confidence,
+        details: event.details as Prisma.InputJsonValue,
+      })),
+    })
+  })
 }
 
-/**
- * Implementação em memória, alimentada pelo resultado do motor. Útil para a
- * camada de serviço e para testes. Não toca em banco.
- */
-export function createInMemoryEventsRepository(
-  eventsByProduct: Map<string, InferenceEvent[]>,
-): InferenceEventsRepository {
-  return {
-    async listByProduct(productId: string) {
-      return eventsByProduct.get(productId) ?? []
-    },
-  }
+export async function listInferenceEvents(userId: string, productId: string) {
+  return prisma.inferenceEventLog.findMany({
+    where: { userId, productId },
+    orderBy: { occurredAt: 'desc' },
+  })
 }

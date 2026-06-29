@@ -110,8 +110,10 @@ export async function listReviews(userId: string) {
       productName: item.product.standardName ?? item.rawName,
       categoryId: group.id,
       categoryName: group.nome,
-      behaviorType: item.behaviorType,
-      estimatedDurationMonths: toNumber(item.estimatedDurationMonths),
+      // A revisão começa sempre com a recorrência atual do produto. O valor
+      // histórico do item pode estar desatualizado após uma edição posterior.
+      behaviorType: item.product.behaviorType,
+      estimatedDurationMonths: toNumber(item.product.estimatedDurationMonths),
       matchConfidence: toNumber(item.matchConfidence),
       quantity: toNumber(item.quantity),
       unit: item.unit,

@@ -29,6 +29,16 @@ export type ConfidenceLevel =
  */
 export type TrendDirection = 'aumentando' | 'diminuindo' | 'estavel'
 
+/** Comportamento cadastrado do produto, independente de qualquer ORM. */
+export type ProductBehavior =
+  | 'recorrente_semanal'
+  | 'recorrente_mensal'
+  | 'estoque'
+  | 'pontual'
+  | 'sazonal'
+  | 'emergencia'
+  | 'fora_do_padrao'
+
 /**
  * Status do estoque estimado de um produto.
  */

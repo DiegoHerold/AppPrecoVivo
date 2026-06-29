@@ -49,6 +49,7 @@ function mapItem(
   )
   return {
     id: item.id,
+    purchaseId: item.purchase.id,
     productId: item.productId,
     date: item.purchase.purchaseDate,
     quantity: converted.amount,

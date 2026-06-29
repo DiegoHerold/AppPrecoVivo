@@ -23,12 +23,17 @@ export interface ConfidenceInput {
   purchaseCount: number
   /** Coeficiente de variação dos intervalos entre compras (ou null). */
   intervalCoefficientOfVariation: number | null
+  /** Fração do histórico com unidade compatível (0..1). */
+  compatiblePurchaseRatio?: number
 }
 
 export function classifyConfidence(input: ConfidenceInput): ConfidenceLevel {
   const cycles = input.purchaseCount - 1
+  const compatibleRatio = input.compatiblePurchaseRatio ?? 1
 
   if (input.purchaseCount < 2) return 'muito_baixa'
+
+  if (compatibleRatio < 0.75) return 'instavel'
 
   // Variação alta domina: mesmo com muitos dados, a previsão é instável.
   if (
@@ -39,10 +44,15 @@ export function classifyConfidence(input: ConfidenceInput): ConfidenceLevel {
     return 'instavel'
   }
 
-  if (cycles <= 3) return 'baixa'
-  if (cycles <= 8) return 'media'
-  if (cycles <= 10) return 'media'
-  return 'alta'
+  let level: ConfidenceLevel
+  if (cycles <= 3) level = 'baixa'
+  else if (cycles <= 10) level = 'media'
+  else level = 'alta'
+
+  // Misturar unidades incompatíveis seria uma falsa precisão. Mesmo uma série
+  // longa fica limitada a baixa confiança enquanto houver lacunas de conversão.
+  if (compatibleRatio < 1 && (level === 'media' || level === 'alta')) return 'baixa'
+  return level
 }
 
 const LABELS: Record<ConfidenceLevel, string> = {

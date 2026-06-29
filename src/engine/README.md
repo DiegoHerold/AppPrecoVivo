@@ -25,6 +25,7 @@ src/
     consumption/     # consumo diário/mensal, tendência, frequência (recalculado a cada compra)
     inventory/       # estoque estimado acumulado, decremento diário, dias restantes, status
     trends/          # eventos por compra (antecipada, tardia, possível falta, grande volume...)
+    dashboard/       # agregações gerais, contagens únicas e custo de consumo estimado
     index.ts         # inferProduct(): compõe tudo numa ProductInference (PURO, data injetável)
   repositories/      # leem do Prisma e mapeiam para o domínio (sem regra de negócio)
   services/          # report.service (dashboards), invoice-import, product-normalization
@@ -38,12 +39,18 @@ src/
 - **Decremento diário:** entre compras o estoque cai conforme o consumo estimado.
 - **Reconstrução pura:** o estoque é recalculado a partir do histórico imutável
   (`reconstructStock`) — nada é sobrescrito.
-- **Consumo ≠ reposição:** o consumo diário exclui a última compra (ainda em
-  estoque), evitando confundir o que foi reposto com o que foi usado.
+- **Consumo ≠ reposição:** o consumo diário usa taxas entre ciclos anteriores,
+  mediana e rejeição de extremos. A compra atual entra no estoque, não vira
+  consumo imediato.
+- **Unidades seguras:** registros incompatíveis continuam no histórico e nos
+  preços, mas não são somados fisicamente; a confiança é reduzida.
 - **Pouca informação → baixa confiança:** funciona com poucos dados, mas degrada
   a confiança em vez de inventar certezas.
 - **Eventos derivados:** compra antecipada/tardia, possível período sem produto,
-  grande volume e tendências são calculados, nunca persistidos sobre o histórico.
+  grande volume e tendências são calculados sem alterar compras. Snapshots
+  reconstruíveis ficam em `InferenceEventLog` para auditoria e explicação.
+- **Categorias comparáveis:** agregados gerais usam custo mensal estimado; nunca
+  somam diretamente kg, litros e unidades.
 
 ## Uso
 
@@ -59,7 +66,7 @@ API: `GET /api/inference` (geral) e `GET /api/inference?productId=...` (produto)
 ## Testes
 
 ```
-npm test   # 33 testes cobrindo statistics, confidence, consumption, inventory,
+npm test   # statistics, confidence, consumption, inventory, dashboard,
            # conversão de unidade e composição do motor (inferProduct)
 ```
 

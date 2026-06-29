@@ -1,20 +1,18 @@
 /**
- * Engine de tendências e eventos de inferência.
- *
- * Classifica cada compra em um evento (compra normal, antecipada, tardia,
- * possível falta, grande volume, emergência...) e deriva eventos de tendência
- * de consumo. Tudo por regras estatísticas — sem IA, sem hardcode de produto.
- *
- * Princípios:
- * - Uma compra antecipada NÃO deve alterar drasticamente o consumo médio.
- * - Uma compra de grande volume aumenta o estoque, mas NÃO conclui sozinha que
- *   o consumo subiu.
- * - Um período sem produto NÃO é tratado como consumo normal.
+ * Eventos explicáveis derivados do histórico. Cada compra é avaliada apenas
+ * com os dados anteriores a ela, evitando vazamento do futuro no diagnóstico.
  */
 
 import type { ConsumptionMetrics, InferenceEvent } from '../../domain/entities'
-import type { ConfidenceLevel, InferenceEventType } from '../../domain/types'
+import type {
+  ConfidenceLevel,
+  InferenceEventType,
+  ProductBehavior,
+} from '../../domain/types'
 import { daysBetween } from '../../domain/value-objects/dates'
+import { computeConsumption } from '../consumption'
+import { reconstructStock } from '../inventory'
+import { median } from '../statistics'
 
 export interface PurchasePoint {
   id: string
@@ -27,193 +25,221 @@ export interface EventDetectionParams {
   purchases: PurchasePoint[]
   consumption: ConsumptionMetrics
   confidence: ConfidenceLevel
-  /** Estoque estimado IMEDIATAMENTE ANTES de cada compra é reconstruído aqui. */
   dailyConsumption: number | null
+  behaviorType?: ProductBehavior
 }
 
-/** Fração do intervalo médio abaixo da qual a compra é "antecipada". */
 const EARLY_RATIO = 0.6
-/** Fração acima da qual a compra é "tardia". */
 const LATE_RATIO = 1.5
-/** Múltiplo da mediana de quantidade acima do qual é "grande volume". */
 const BULK_MEDIAN_MULTIPLE = 2.5
-/** Dias de estoque negativo a partir dos quais marcamos possível falta. */
 const SHORTAGE_MIN_DAYS = 1
 
 function buildEvent(
   type: InferenceEventType,
-  params: { productId: string; purchaseId: string | null; date: Date; message: string; confidence: ConfidenceLevel; details?: Record<string, number | string | null> },
+  params: {
+    productId: string
+    purchaseId: string | null
+    date: Date
+    title: string
+    description: string
+    impact: string
+    confidence: ConfidenceLevel
+    details?: Record<string, number | string | null>
+  },
 ): InferenceEvent {
   return {
     type,
     productId: params.productId,
     purchaseId: params.purchaseId,
     date: params.date,
-    message: params.message,
+    title: params.title,
+    description: params.description,
+    impact: params.impact,
+    message: params.description,
     confidence: params.confidence,
     details: params.details ?? {},
   }
 }
 
-/**
- * Classifica eventos por compra. Caminha cronologicamente e, a cada compra
- * (a partir da segunda), avalia:
- * - intervalo desde a compra anterior vs. intervalo médio (antecipada/tardia);
- * - estoque reconstruído logo antes da compra (possível falta);
- * - quantidade vs. mediana histórica (grande volume).
- */
+function contextualEvent(
+  behaviorType: ProductBehavior | undefined,
+  productId: string,
+  purchase: PurchasePoint,
+  confidence: ConfidenceLevel,
+): InferenceEvent | null {
+  if (behaviorType === 'emergencia') {
+    return buildEvent('compra_emergencia', {
+      productId,
+      purchaseId: purchase.id,
+      date: purchase.date,
+      title: 'Possível compra de emergência',
+      description: 'A compra foi registrada como emergencial no plano do produto.',
+      impact: 'O estoque aumenta, mas o evento não redefine sozinho o consumo médio.',
+      confidence,
+    })
+  }
+  if (behaviorType === 'sazonal') {
+    return buildEvent('compra_sazonal', {
+      productId,
+      purchaseId: purchase.id,
+      date: purchase.date,
+      title: 'Possível compra sazonal',
+      description: 'A compra pertence a um produto marcado como sazonal.',
+      impact: 'A sazonalidade fica registrada sem transformar a compra em consumo recorrente.',
+      confidence,
+    })
+  }
+  return null
+}
+
 export function detectPurchaseEvents(
   params: EventDetectionParams,
 ): InferenceEvent[] {
-  const { productId, consumption, confidence } = params
+  const { productId, confidence, behaviorType } = params
   const sorted = [...params.purchases].sort(
     (a, b) => a.date.getTime() - b.date.getTime(),
   )
-  if (sorted.length < 2) {
-    return sorted.map((p) =>
-      buildEvent('compra_normal', {
-        productId,
-        purchaseId: p.id,
-        date: p.date,
-        message: 'Primeira compra registrada deste produto.',
-        confidence: 'muito_baixa',
-      }),
-    )
-  }
-
-  const avgInterval = consumption.averagePurchaseInterval
-  const medianQty = consumption.quantityStats.median
-  const consumptionRate = params.dailyConsumption ?? 0
   const events: InferenceEvent[] = []
 
-  // Estoque reconstruído incrementalmente para detectar falta antes de cada compra.
-  let stock = 0
-  let cursor = sorted[0].date
-  stock += sorted[0].quantity
-  events.push(
-    buildEvent('compra_normal', {
-      productId,
-      purchaseId: sorted[0].id,
-      date: sorted[0].date,
-      message: 'Primeira compra registrada deste produto.',
-      confidence,
-    }),
-  )
+  for (let index = 0; index < sorted.length; index += 1) {
+    const current = sorted[index]
+    const prior = sorted.slice(0, index)
+    let detected = false
 
-  for (let i = 1; i < sorted.length; i += 1) {
-    const prev = sorted[i - 1]
-    const current = sorted[i]
-    const interval = daysBetween(current.date, prev.date)
+    if (prior.length > 0) {
+      const previous = prior[prior.length - 1]
+      const intervalDays = daysBetween(current.date, previous.date)
+      const priorConsumption = computeConsumption(
+        prior.map((purchase) => ({ date: purchase.date, quantity: purchase.quantity })),
+      )
+      const expectedInterval = priorConsumption.averageRefillInterval
 
-    // Estoque imediatamente antes desta compra.
-    const elapsed = daysBetween(current.date, cursor)
-    const stockBefore = stock - consumptionRate * elapsed
-
-    let classified = false
-
-    // 1) Possível período sem produto: estoque estimado esgotou antes da recompra.
-    if (consumptionRate > 0 && stockBefore < 0) {
-      const shortageDays = Math.abs(stockBefore) / consumptionRate
-      if (shortageDays >= SHORTAGE_MIN_DAYS) {
+      if (
+        expectedInterval !== null &&
+        expectedInterval > 0 &&
+        intervalDays < expectedInterval * EARLY_RATIO
+      ) {
         events.push(
-          buildEvent('possivel_periodo_sem_produto', {
+          buildEvent('compra_antecipada', {
             productId,
             purchaseId: current.id,
             date: current.date,
-            message: `Possível falta de produto por cerca de ${Math.round(shortageDays)} dia(s) antes desta compra.`,
+            title: 'Possível compra antecipada',
+            description: `A reposição ocorreu ${Math.round(intervalDays)} dias após a anterior; o padrão estimado era de cerca de ${Math.round(expectedInterval)} dias.`,
+            impact: 'Estoque aumentado; consumo médio preservado.',
             confidence,
-            details: { shortageDays: Math.round(shortageDays) },
+            details: {
+              intervalDays: Math.round(intervalDays),
+              expectedIntervalDays: Math.round(expectedInterval),
+            },
           }),
         )
-        classified = true
+        detected = true
+      }
+
+      if (
+        expectedInterval !== null &&
+        expectedInterval > 0 &&
+        intervalDays > expectedInterval * LATE_RATIO
+      ) {
+        events.push(
+          buildEvent('compra_tardia', {
+            productId,
+            purchaseId: current.id,
+            date: current.date,
+            title: 'Possível compra tardia',
+            description: `A reposição ocorreu ${Math.round(intervalDays)} dias após a anterior, acima do intervalo habitual estimado.`,
+            impact: 'O intervalo maior é sinalizado, sem ser tratado como consumo adicional.',
+            confidence,
+            details: {
+              intervalDays: Math.round(intervalDays),
+              expectedIntervalDays: Math.round(expectedInterval),
+            },
+          }),
+        )
+        detected = true
+      }
+
+      if (priorConsumption.dailyAverage && priorConsumption.dailyAverage > 0) {
+        const stockBefore = reconstructStock({
+          purchases: prior.map((purchase) => ({
+            date: purchase.date,
+            quantity: purchase.quantity,
+          })),
+          dailyConsumption: priorConsumption.dailyAverage,
+          unit: '',
+          asOf: current.date,
+        })
+        if (stockBefore < 0) {
+          const shortageDays = Math.abs(stockBefore) / priorConsumption.dailyAverage
+          if (shortageDays >= SHORTAGE_MIN_DAYS) {
+            events.push(
+              buildEvent('possivel_periodo_sem_produto', {
+                productId,
+                purchaseId: current.id,
+                date: current.date,
+                title: 'Possível período sem produto',
+                description: `O estoque estimado pode ter ficado insuficiente por cerca de ${Math.round(shortageDays)} dia(s) antes desta reposição.`,
+                impact: 'A lacuna não é contabilizada como consumo normal.',
+                confidence,
+                details: { shortageDays: Math.round(shortageDays) },
+              }),
+            )
+            detected = true
+          }
+        }
+      }
+
+      const priorMedianQuantity = median(prior.map((purchase) => purchase.quantity))
+      if (
+        prior.length >= 2 &&
+        priorMedianQuantity !== null &&
+        priorMedianQuantity > 0 &&
+        current.quantity >= priorMedianQuantity * BULK_MEDIAN_MULTIPLE
+      ) {
+        events.push(
+          buildEvent('compra_grande_volume', {
+            productId,
+            purchaseId: current.id,
+            date: current.date,
+            title: 'Compra em grande volume',
+            description: `A quantidade foi maior que o padrão recente de reposição (${current.quantity} versus mediana de ${priorMedianQuantity}).`,
+            impact: 'Estoque aumentado; nenhuma alta de consumo é concluída apenas por esta compra.',
+            confidence,
+            details: { quantity: current.quantity, medianQuantity: priorMedianQuantity },
+          }),
+        )
+        detected = true
       }
     }
 
-    // 2) Compra antecipada: comprou bem antes do intervalo médio (ainda havia estoque).
-    if (
-      !classified &&
-      avgInterval !== null &&
-      avgInterval > 0 &&
-      interval < avgInterval * EARLY_RATIO &&
-      stockBefore > 0
-    ) {
-      events.push(
-        buildEvent('compra_antecipada', {
-          productId,
-          purchaseId: current.id,
-          date: current.date,
-          message: `Compra antecipada: ${Math.round(interval)} dias após a anterior (média ~${Math.round(avgInterval)} dias).`,
-          confidence,
-          details: { intervalDays: Math.round(interval), averageIntervalDays: Math.round(avgInterval) },
-        }),
-      )
-      classified = true
+    const contextual = contextualEvent(behaviorType, productId, current, confidence)
+    if (contextual) {
+      events.push(contextual)
+      detected = true
     }
 
-    // 3) Compra tardia: intervalo muito acima da média.
-    if (
-      !classified &&
-      avgInterval !== null &&
-      avgInterval > 0 &&
-      interval > avgInterval * LATE_RATIO
-    ) {
-      events.push(
-        buildEvent('compra_tardia', {
-          productId,
-          purchaseId: current.id,
-          date: current.date,
-          message: `Compra tardia: ${Math.round(interval)} dias após a anterior (média ~${Math.round(avgInterval)} dias).`,
-          confidence,
-          details: { intervalDays: Math.round(interval), averageIntervalDays: Math.round(avgInterval) },
-        }),
-      )
-      classified = true
-    }
-
-    // 4) Grande volume: quantidade muito acima da mediana histórica.
-    //    Independente da classificação temporal — pode coexistir.
-    if (
-      medianQty !== null &&
-      medianQty > 0 &&
-      current.quantity >= medianQty * BULK_MEDIAN_MULTIPLE
-    ) {
-      events.push(
-        buildEvent('compra_grande_volume', {
-          productId,
-          purchaseId: current.id,
-          date: current.date,
-          message: `Compra em grande volume: ${current.quantity} (mediana ~${medianQty}).`,
-          confidence,
-          details: { quantity: current.quantity, medianQuantity: medianQty },
-        }),
-      )
-      classified = true
-    }
-
-    if (!classified) {
+    if (!detected) {
       events.push(
         buildEvent('compra_normal', {
           productId,
           purchaseId: current.id,
           date: current.date,
-          message: 'Compra dentro do padrão histórico.',
-          confidence,
+          title: index === 0 ? 'Primeira compra registrada' : 'Compra dentro do padrão',
+          description:
+            index === 0
+              ? 'Ainda não há ciclos suficientes para comparar esta compra.'
+              : 'Não foram detectadas variações relevantes nesta reposição.',
+          impact: 'A compra foi somada ao estoque estimado.',
+          confidence: index === 0 ? 'muito_baixa' : confidence,
         }),
       )
     }
-
-    // Atualiza estoque: aplica consumo do período e soma a compra.
-    stock = stockBefore + current.quantity
-    cursor = current.date
   }
 
   return events
 }
 
-/**
- * Deriva eventos de tendência de consumo (aumentando/diminuindo) a partir das
- * métricas já calculadas. Não reavalia compras individuais.
- */
 export function detectTrendEvents(
   productId: string,
   consumption: ConsumptionMetrics,
@@ -226,7 +252,9 @@ export function detectTrendEvents(
         productId,
         purchaseId: null,
         date: referenceDate,
-        message: 'Consumo aparenta estar aumentando ao longo do tempo.',
+        title: 'Consumo estimado em alta',
+        description: 'As taxas estimadas entre ciclos recentes apresentam tendência de aumento.',
+        impact: 'A previsão de estoque passa a considerar um ritmo de uso maior.',
         confidence,
       }),
     ]
@@ -237,7 +265,9 @@ export function detectTrendEvents(
         productId,
         purchaseId: null,
         date: referenceDate,
-        message: 'Consumo aparenta estar diminuindo ao longo do tempo.',
+        title: 'Consumo estimado em queda',
+        description: 'As taxas estimadas entre ciclos recentes apresentam tendência de redução.',
+        impact: 'A previsão de estoque passa a considerar um ritmo de uso menor.',
         confidence,
       }),
     ]

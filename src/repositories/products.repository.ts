@@ -23,6 +23,7 @@ export async function loadProductInputs(userId: string): Promise<ProductInput[]>
     normalizedName: normalizeProductName(product.standardName),
     category: product.node?.parent?.nome ?? null,
     standardUnit: product.defaultUnit,
+    behaviorType: product.behaviorType,
   }))
 }
 
@@ -41,5 +42,6 @@ export async function loadProductInput(
     normalizedName: normalizeProductName(product.standardName),
     category: product.node?.parent?.nome ?? null,
     standardUnit: product.defaultUnit,
+    behaviorType: product.behaviorType,
   }
 }

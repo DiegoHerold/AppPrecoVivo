@@ -11,6 +11,7 @@ const product: ProductInput = {
   normalizedName: 'arroz',
   category: 'Mercearia',
   standardUnit: 'kg',
+  behaviorType: 'estoque',
 }
 
 function purchase(
@@ -21,6 +22,7 @@ function purchase(
 ): PurchaseRecord {
   return {
     id,
+    purchaseId: `purchase-${id}`,
     productId: 'p1',
     date: D(date),
     quantity,
@@ -63,6 +65,7 @@ test('detecta compra antecipada sem distorcer drasticamente o consumo', () => {
   })
   const hasEarly = inference.events.some((e) => e.type === 'compra_antecipada')
   assert.ok(hasEarly)
+  assert.ok(inference.consumption.dailyAverage! < 0.04)
 })
 
 test('detecta possível período sem produto em compra muito tardia', () => {
@@ -80,6 +83,7 @@ test('detecta possível período sem produto em compra muito tardia', () => {
     (e) => e.type === 'possivel_periodo_sem_produto',
   )
   assert.ok(shortage)
+  assert.ok(inference.events.some((e) => e.type === 'compra_tardia'))
 })
 
 test('detecta compra em grande volume sem concluir aumento de consumo', () => {
@@ -95,6 +99,7 @@ test('detecta compra em grande volume sem concluir aumento de consumo', () => {
   })
   const bulk = inference.events.some((e) => e.type === 'compra_grande_volume')
   assert.ok(bulk)
+  assert.notEqual(inference.consumption.trend, 'aumentando')
 })
 
 test('funciona com produto sem compras (baixa confiança, sem crash)', () => {
@@ -120,4 +125,37 @@ test('preços agregados: médio, mínimo e máximo', () => {
   assert.equal(inference.minPrice, 20)
   assert.equal(inference.maxPrice, 30)
   assert.equal(inference.averagePrice, 25)
+})
+
+test('preserva compra com unidade incompatível, mas não a mistura no estoque', () => {
+  const incompatible = purchase('b', '2026-02-01', 20)
+  incompatible.unit = 'L'
+  incompatible.unitConverted = false
+  const inference = inferProduct({
+    product,
+    purchases: [purchase('a', '2026-01-01', 5), incompatible],
+    asOf: D('2026-02-01'),
+  })
+  assert.equal(inference.purchaseCount, 2)
+  assert.equal(inference.usablePurchaseCount, 1)
+  assert.equal(inference.confidence, 'muito_baixa')
+  assert.equal(inference.inventory.estimatedStock, 5)
+})
+
+test('registra compras sazonais e emergenciais sem transformá-las em consumo', () => {
+  const purchases = [purchase('a', '2026-01-01', 1)]
+  const seasonal = inferProduct({
+    product: { ...product, behaviorType: 'sazonal' },
+    purchases,
+    asOf: D('2026-01-01'),
+  })
+  const emergency = inferProduct({
+    product: { ...product, behaviorType: 'emergencia' },
+    purchases,
+    asOf: D('2026-01-01'),
+  })
+  assert.ok(seasonal.events.some((event) => event.type === 'compra_sazonal'))
+  assert.ok(emergency.events.some((event) => event.type === 'compra_emergencia'))
+  assert.equal(seasonal.consumption.dailyAverage, null)
+  assert.equal(emergency.consumption.dailyAverage, null)
 })

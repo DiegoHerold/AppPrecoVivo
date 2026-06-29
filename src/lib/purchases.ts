@@ -5,6 +5,7 @@ import { classificationSimilarity, estimateProductDuration, normalizeProductName
 import { accessKeyFrom, importerFor, ManualTextImporter } from '@/lib/importers'
 import { manualPurchaseSchema, pendingImportSchema, rawTextImportSchema } from '@/lib/validation'
 import { recalculatePurchaseMonth } from '@/lib/monthly-flow'
+import { syncInferenceEventsForUser } from '@/services/inference-events.service'
 import { createProdutoWithNode } from '@/lib/plano-contas'
 
 type Tx = Prisma.TransactionClient
@@ -148,6 +149,7 @@ async function persistManualPurchase(userId: string, input: ManualInput, source:
   })
 
   await recalculatePurchaseMonth(userId, purchase.purchaseDate)
+  await syncInferenceEventsForUser(userId)
   return purchase
 }
 
@@ -296,8 +298,8 @@ export async function createPendingImport(userId: string, unknownInput: unknown)
 export async function confirmReview(userId: string, itemId: string, input: {
   standardName: string
   categoryId: string
-  behaviorType: BehaviorType
-  estimatedDurationMonths: number
+  behaviorType?: BehaviorType
+  estimatedDurationMonths?: number
 }) {
   const result = await prisma.$transaction(async (tx) => {
     const item = await tx.purchaseItem.findFirst({
@@ -306,14 +308,16 @@ export async function confirmReview(userId: string, itemId: string, input: {
     })
     if (!item) throw new Error('Item não encontrado.')
     if (!item.product.node) throw new Error('Produto sem nó correspondente no plano de contas.')
+    const behaviorType = input.behaviorType ?? item.product.behaviorType
+    const estimatedDurationMonths = input.estimatedDurationMonths ?? Number(item.product.estimatedDurationMonths)
     const group = await tx.planoConta.findFirst({ where: { id: input.categoryId, userId, tipo: 'GRUPO', ativo: true } })
     if (!group) throw new Error('Grupo inválido.')
     await tx.product.update({
       where: { id: item.productId },
       data: {
         standardName: input.standardName,
-        behaviorType: input.behaviorType,
-        estimatedDurationMonths: input.estimatedDurationMonths,
+        behaviorType: input.behaviorType ?? undefined,
+        estimatedDurationMonths: input.estimatedDurationMonths ?? undefined,
         classificationConfirmed: true,
       },
     })
@@ -330,8 +334,8 @@ export async function confirmReview(userId: string, itemId: string, input: {
     await tx.purchaseItem.update({
       where: { id: item.id },
       data: {
-        behaviorType: input.behaviorType,
-        estimatedDurationMonths: input.estimatedDurationMonths,
+        behaviorType,
+        estimatedDurationMonths,
         matchConfidence: 1,
         needsReview: false,
       },
@@ -341,5 +345,6 @@ export async function confirmReview(userId: string, itemId: string, input: {
     return item.purchase
   })
   await recalculatePurchaseMonth(userId, result.purchaseDate)
+  await syncInferenceEventsForUser(userId)
   return result
 }

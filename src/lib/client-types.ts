@@ -25,6 +25,39 @@ export type PlanoContaNode = {
   behaviorType?: BehaviorType; estimatedDurationMonths?: number; productActive?: boolean
 }
 export type InsightDto = { id: string; type: string; title: string; description: string; amount: number }
+export type ConfidenceLevel = 'muito_baixa' | 'baixa' | 'media' | 'alta' | 'instavel'
+export type StockStatus = 'sem_dados' | 'recem_abastecido' | 'saudavel' | 'proximo_do_fim' | 'possivel_falta'
+export type TrendDirection = 'aumentando' | 'diminuindo' | 'estavel'
+export type InferenceProductSummaryDto = {
+  productId: string; name: string; category: string | null; status: StockStatus
+  daysRemaining: number | null; confidence: ConfidenceLevel
+}
+export type InferenceDashboardDto = {
+  generatedAt: string; productsWithStockEstimate: number
+  nearEnd: InferenceProductSummaryDto[]; recentlyRefilled: InferenceProductSummaryDto[]
+  staleProducts: InferenceProductSummaryDto[]; earlyPurchases: InferenceProductSummaryDto[]
+  possibleShortages: InferenceProductSummaryDto[]
+  topConsumingCategories: { category: string; estimatedMonthlyCost: number; productCount: number }[]
+  consumptionByMonth: { month: string; label: string; total: number }[]
+  spendByMonth: { month: string; label: string; total: number }[]
+  currentMonth: { totalSpent: number; productsPurchased: number; purchaseCount: number }
+  topStores: { store: string; purchaseCount: number }[]
+}
+export type ProductInferenceEventDto = {
+  type: string; title: string; description: string; impact: string; date: string
+  confidence: ConfidenceLevel; details: Record<string, number | string | null>
+}
+export type ProductInferenceDto = {
+  productId: string; name: string; category: string | null; unit: string
+  estimatedStock: number; estimatedStockLabel: string; daysRemaining: number | null
+  projectedDepletionDate: string | null; dailyConsumption: number | null
+  monthlyConsumption: number | null; estimatedMonthlyCost: number | null
+  lastPurchaseDate: string | null; averagePrice: number | null; minPrice: number | null
+  maxPrice: number | null; quantityPurchasedLastYear: number; purchaseCount: number
+  usablePurchaseCount: number; refillCount: number; averagePurchaseIntervalDays: number | null
+  purchaseFrequencyPerMonth: number | null; trend: TrendDirection; status: StockStatus
+  confidence: ConfidenceLevel; confidenceLabel: string; recentEvents: ProductInferenceEventDto[]
+}
 export type DashboardDto = {
   year: number; month: number; monthLabel: string; previousMonthLabel: string; totalSpent: number; previousTotalSpent: number
   difference: number; estimatedConsumption: number; stockAmount: number; recurringAmount: number; punctualAmount: number
