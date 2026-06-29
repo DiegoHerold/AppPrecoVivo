@@ -10,7 +10,7 @@
     "start:lan": "next start -p 5174 -H 0.0.0.0",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/**/*.test.ts",
+    "test": "tsx --test src/lib/**/*.test.ts src/engine/**/*.test.ts src/domain/**/*.test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
