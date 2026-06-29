@@ -5,7 +5,7 @@ import { classificationSimilarity, estimateProductDuration, normalizeProductName
 import { accessKeyFrom, importerFor, ManualTextImporter } from '@/lib/importers'
 import { manualPurchaseSchema, pendingImportSchema, rawTextImportSchema } from '@/lib/validation'
 import { recalculatePurchaseMonth } from '@/lib/monthly-flow'
-import { createProductWithAccount } from '@/lib/products'
+import { createProductWithAccount } from '@/lib/product-accounts'
 
 type Tx = Prisma.TransactionClient
 
@@ -17,7 +17,7 @@ export async function matchProductByAlias(tx: Tx, userId: string, rawName: strin
   })
   if (exact) {
     if (!exact.product.account) throw new Error('Produto sem conta correspondente no plano de contas.')
-    return { product: exact.product, confidence: 0.99 }
+    return { product: exact.product, account: exact.product.account, confidence: 0.99 }
   }
 
   const products = await tx.product.findMany({
@@ -36,7 +36,7 @@ export async function matchProductByAlias(tx: Tx, userId: string, rawName: strin
   }
   if (!best || confidence < 0.78) return null
   if (!best.account) throw new Error('Produto sem conta correspondente no plano de contas.')
-  return { product: best, confidence }
+  return { product: best, account: best.account, confidence }
 }
 
 async function learnedCategoryFor(tx: Tx, userId: string, rawName: string) {
@@ -88,7 +88,7 @@ async function persistManualPurchase(userId: string, input: ManualInput, source:
         resolvedItems.push({
           ...item,
           productId: match.product.id,
-          productAccountId: match.product.account.id,
+          productAccountId: match.account.id,
           categoryId: match.product.categoryId,
           behaviorType: match.product.behaviorType,
           estimatedDurationMonths: Number(match.product.estimatedDurationMonths),

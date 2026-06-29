@@ -1,58 +1,16 @@
 import type { z } from 'zod'
-import type { BehaviorType, Prisma } from '@/generated/prisma/client'
 import { prisma } from '@/lib/prisma'
 import { recalculatePurchaseMonth } from '@/lib/monthly-flow'
 import { getProductDetail } from '@/lib/queries'
 import type { productUpdateSchema } from '@/lib/validation'
 
 type ProductUpdateInput = z.infer<typeof productUpdateSchema>
-type ProductTransaction = Prisma.TransactionClient
-
-export type NewProductInput = {
-  standardName: string
-  categoryId: string
-  behaviorType: BehaviorType
-  estimatedDurationMonths: number
-  defaultUnit: string
-  classificationConfirmed: boolean
-  active?: boolean
-  brand?: string | null
-  packageSize?: string | null
-}
 
 export class ProductUpdateError extends Error {
   constructor(message: string, public status = 400) {
     super(message)
     this.name = 'ProductUpdateError'
   }
-}
-
-export async function createProductWithAccount(tx: ProductTransaction, userId: string, input: NewProductInput) {
-  const product = await tx.product.create({
-    data: {
-      userId,
-      standardName: input.standardName,
-      categoryId: input.categoryId,
-      behaviorType: input.behaviorType,
-      estimatedDurationMonths: input.estimatedDurationMonths,
-      defaultUnit: input.defaultUnit,
-      classificationConfirmed: input.classificationConfirmed,
-      active: input.active ?? true,
-      brand: input.brand || null,
-      packageSize: input.packageSize || null,
-    },
-  })
-  const account = await tx.productAccount.create({
-    data: {
-      userId,
-      productId: product.id,
-      name: product.standardName,
-      type: 'PRODUTO',
-      categoryId: product.categoryId,
-      active: product.active,
-    },
-  })
-  return { product, account }
 }
 
 export async function updateProduct(userId: string, productId: string, input: ProductUpdateInput) {
@@ -70,6 +28,7 @@ export async function updateProduct(userId: string, productId: string, input: Pr
 
   if (!product) throw new ProductUpdateError('Produto não encontrado.', 404)
   if (!product.account) throw new ProductUpdateError('Produto sem conta correspondente no plano de contas.', 409)
+  const productAccount = product.account
   if (!category) throw new ProductUpdateError('Classificação não encontrada ou desativada.', 404)
   if (duplicate) throw new ProductUpdateError('Já existe outro produto com esse nome.', 409)
   if (!category.allowedUnits.includes(input.defaultUnit)) {
@@ -102,7 +61,7 @@ export async function updateProduct(userId: string, productId: string, input: Pr
       await tx.purchaseItem.updateMany({
         where: { productId, purchase: { userId } },
         data: {
-          productAccountId: product.account.id,
+          productAccountId: productAccount.id,
           categoryId: input.categoryId,
           behaviorType: input.behaviorType,
           estimatedDurationMonths: input.estimatedDurationMonths,

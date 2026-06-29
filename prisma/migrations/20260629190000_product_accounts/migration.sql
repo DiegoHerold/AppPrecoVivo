@@ -151,6 +151,6 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION ensure_product_account_exists();
 
 CREATE CONSTRAINT TRIGGER "ProductAccount_preserves_product_account"
-AFTER DELETE OR UPDATE OF "productId" ON "ProductAccount"
+AFTER DELETE OR UPDATE ON "ProductAccount"
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION ensure_product_account_exists();
