@@ -1,6 +1,37 @@
 @import "tailwindcss";
 
-:root { --background: #f4f6fa; --foreground: #111827; --app-max-width: 768px; --bottom-nav-height: 88px; }
+:root, [data-theme="light"] {
+  color-scheme: light;
+  --background: #eef1f8;
+  --app-surface: #f6f7fc;
+  --surface: #ffffff;
+  --surface-soft: #eef1f7;
+  --surface-muted: #e2e7f0;
+  --foreground: #111827;
+  --text-strong: #172033;
+  --text-body: #475569;
+  --text-muted: #64748b;
+  --border: #dce2ec;
+  --accent: #635bff;
+  --accent-soft: #eeecff;
+  --app-max-width: 768px;
+  --bottom-nav-height: 88px;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #070b14;
+  --app-surface: #0b1220;
+  --surface: #121b2e;
+  --surface-soft: #182338;
+  --surface-muted: #24314a;
+  --foreground: #f1f5ff;
+  --text-strong: #f5f7ff;
+  --text-body: #c3cce0;
+  --text-muted: #91a0ba;
+  --border: #293650;
+  --accent: #8b83ff;
+  --accent-soft: #25234a;
+}
 * { box-sizing: border-box; }
 html { min-height: 100%; overflow-x: hidden; background: var(--background); }
 body { margin: 0; min-height: 100dvh; overflow-x: hidden; background: var(--background); color: var(--foreground); font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 16px; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
@@ -8,15 +39,15 @@ button, input, textarea, select { font: inherit; }
 button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .scrollbar-none { scrollbar-width: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
-.app-shell { width: 100%; height: 100dvh; min-height: 100dvh; overflow: hidden; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); background: #e9edf4; }
+.app-shell { width: 100%; height: 100dvh; min-height: 100dvh; overflow: hidden; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); background: var(--background); }
 .app-shell-dark { background: #08080b; }
 .app-surface { position: relative; width: 100%; height: 100%; min-height: 0; margin-inline: auto; overflow: hidden; }
 .app-viewport { position: relative; height: 100%; min-height: 0; overflow: hidden; }
 .app-viewport.with-nav { padding-bottom: calc(var(--bottom-nav-height) + 18px); }
 .app-scroll { height: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
 .bottom-navigation { position: fixed; z-index: 50; right: 0; bottom: 0; left: 0; min-height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom)); padding-bottom: max(10px, env(safe-area-inset-bottom)); }
-.auth-label, .form-label { display: grid; gap: 7px; color: #374151; font-size: 14px; line-height: 1.4; font-weight: 700; }
-.auth-input, .form-input { width: 100%; min-width: 0; min-height: 48px; border: 1px solid #d8dee9; border-radius: 13px; background: white; padding: 12px 14px; color: #111827; font-size: 16px; font-weight: 500; outline: none; transition: border-color .2s, box-shadow .2s; }
+.auth-label, .form-label { display: grid; gap: 7px; color: var(--text-body); font-size: 14px; line-height: 1.4; font-weight: 700; }
+.auth-input, .form-input { width: 100%; min-width: 0; min-height: 48px; border: 1px solid var(--border); border-radius: 13px; background: var(--surface); padding: 12px 14px; color: var(--foreground); font-size: 16px; font-weight: 500; outline: none; transition: border-color .2s, box-shadow .2s; }
 .auth-input:focus, .form-input:focus { border-color: #7770f8; box-shadow: 0 0 0 3px rgba(99, 91, 255, .1); }
 .form-error { margin-top: -6px; color: #e11d48; font-size: 13px; line-height: 1.4; }
 .app-shell button, .app-shell [role="button"] { min-height: 44px; }
@@ -45,4 +76,35 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
-[data-compact="true"] .app-viewport section { margin-top: 0.65rem; }
+
+/* Escuro Aurora: traduz as superfícies utilitárias existentes sem exigir que cada tela duplique estilos. */
+[data-theme="dark"] .app-surface { background-color: var(--app-surface); }
+[data-theme="dark"] :is(.bg-white, .bg-slate-50) { background-color: var(--surface) !important; }
+[data-theme="dark"] :is(.bg-slate-100, .bg-slate-200) { background-color: var(--surface-soft) !important; }
+[data-theme="dark"] :is(.text-slate-950, .text-slate-900, .text-slate-800) { color: var(--text-strong) !important; }
+[data-theme="dark"] :is(.text-slate-700, .text-slate-600, .text-slate-500) { color: var(--text-body) !important; }
+[data-theme="dark"] .text-slate-400 { color: var(--text-muted) !important; }
+[data-theme="dark"] :is(.border-slate-100, .border-slate-200, .border-slate-300) { border-color: var(--border) !important; }
+[data-theme="dark"] :is(.bg-indigo-50, .bg-violet-50) { background-color: #232345 !important; }
+[data-theme="dark"] :is(.bg-emerald-50, .bg-cyan-50) { background-color: #102d2c !important; }
+[data-theme="dark"] .bg-amber-50 { background-color: #332812 !important; }
+[data-theme="dark"] .bg-rose-50 { background-color: #351a28 !important; }
+[data-theme="dark"] :is(.text-indigo-600, .text-indigo-700, .text-violet-600, .text-violet-700) { color: #aaa5ff !important; }
+[data-theme="dark"] :is(.text-emerald-600, .text-emerald-700, .text-emerald-800) { color: #6ee7c2 !important; }
+[data-theme="dark"] :is(.text-amber-600, .text-amber-700, .text-amber-800, .text-amber-900) { color: #f6c85f !important; }
+[data-theme="dark"] :is(.text-rose-600, .text-rose-700) { color: #fb91b5 !important; }
+[data-theme="dark"] .bottom-navigation { border-color: var(--border) !important; background: rgba(18, 27, 46, .96) !important; }
+[data-theme="dark"] .app-shell-dark { background: #08080b; }
+[data-theme="dark"] .theme-native-dark .bg-white { background-color: #ffffff !important; }
+
+[data-contrast="high"] { --text-body: var(--foreground); --text-muted: var(--foreground); --border: #71809c; }
+[data-contrast="high"] .app-shell :focus-visible { outline: 3px solid #f59e0b !important; outline-offset: 2px; }
+[data-contrast="high"] :is(.border-slate-100, .border-slate-200, .border-slate-300) { border-color: var(--border) !important; }
+[data-contrast="high"] :is(.text-slate-400, .text-slate-500, .text-slate-600) { color: var(--text-body) !important; }
+
+[data-font-scale="large"] { font-size: 17px; }
+[data-font-scale="large"] .app-shell .text-xs { font-size: 15px; }
+[data-font-scale="large"] .app-shell .text-sm { font-size: 18px; }
+[data-font-scale="large"] .app-shell :is([class~="text-[9px]"], [class~="text-[10px]"], [class~="text-[11px]"]) { font-size: 16px; }
+
+[data-reduce-motion="true"] *, [data-reduce-motion="true"] *::before, [data-reduce-motion="true"] *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { clientApi } from '@/lib/client-api'
+import { applyDevicePreferences, applyThemePreference, readDevicePreferences } from '@/lib/device-preferences'
 import type { AppScreen, CategoryDto, DashboardDto, InferenceDashboardDto, PlanoContaNode, ProductDetailDto, ProductDto, ProductInferenceDto, PurchaseDto, ReviewDto, UserDto } from '@/lib/client-types'
 import { AuthScreen } from './auth-screen'
 import { AddNoteScreen } from './add-note-screen'
@@ -56,12 +57,13 @@ export function PurchaseFlowApp() {
   const [flowLoading, setFlowLoading] = useState(false)
 
   useEffect(() => {
+    applyDevicePreferences(readDevicePreferences())
     clientApi<{ user: UserDto }>('/api/auth/me').then((result) => setUser(result.user)).catch(() => setUser(null)).finally(() => setChecking(false))
   }, [])
 
   useEffect(() => {
-    document.documentElement.dataset.compact = user?.settings.compactMode ? 'true' : 'false'
-  }, [user?.settings.compactMode])
+    applyThemePreference(user?.settings.theme ?? 'light')
+  }, [user?.settings.theme])
 
   async function reloadAll() {
     if (!user) return
@@ -128,7 +130,7 @@ export function PurchaseFlowApp() {
 
   const navVisible = !withoutBottomNav.has(screen)
   const selectableCategories = categories.filter((category) => category.active)
-  return <main className={`app-shell ${screen === 'add' ? 'app-shell-dark' : ''}`}><section className={`app-surface ${screen === 'add' ? 'bg-[#08080B]' : 'bg-[#F4F6FA]'}`}><div className={`app-viewport ${navVisible ? 'with-nav' : ''}`}><div key={`${screen}-${selectedProductId ?? ''}-${selectedPurchaseId ?? ''}`} className="app-scroll scrollbar-none">
+  return <main className={`app-shell ${screen === 'add' ? 'app-shell-dark' : ''}`}><section className={`app-surface ${screen === 'add' ? 'bg-[#08080B]' : 'bg-[var(--app-surface)]'}`}><div className={`app-viewport ${navVisible ? 'with-nav' : ''}`}><div key={`${screen}-${selectedProductId ?? ''}-${selectedPurchaseId ?? ''}`} className="app-scroll scrollbar-none">
     {loading && !dashboard ? <LoadingState /> : error && !dashboard ? <ErrorState message={error} retry={() => void reloadAll()} /> : <>
       {screen === 'home' && inference && <HomeScreen user={user} data={inference} reviewCount={reviews.length} navigate={navigate} openProduct={(id) => void openProduct(id)} />}
       {screen === 'profile' && <ProfileScreen user={user} onBack={goBack} updated={setUser} logout={() => void logout()} />}

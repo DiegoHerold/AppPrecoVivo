@@ -1,13 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm, useWatch } from 'react-hook-form'
-import { Bell, Camera, CheckCircle2, Construction, KeyRound, LogOut, MapPin, MonitorCog, Moon, Palette, ShieldCheck, Smartphone, Sun } from 'lucide-react'
+import { Accessibility, Bell, Camera, CheckCircle2, Eye, KeyRound, LogOut, MapPin, Moon, Palette, ShieldCheck, Smartphone, Sparkles, Sun, ZoomIn } from 'lucide-react'
 import { z } from 'zod'
 import { clientApi } from '@/lib/client-api'
 import { requestCamera } from '@/lib/camera'
 import type { UserDto } from '@/lib/client-types'
+import { applyThemePreference, readDevicePreferences, saveDevicePreferences, type DevicePreferences } from '@/lib/device-preferences'
 import { passwordChangeSchema, profileSchema } from '@/lib/validation'
 import { PageHeader, PrimaryButton } from './ui'
 
@@ -21,12 +22,13 @@ function SwitchField({ label, description, checked, onChange, icon }: { label: s
   return <label className="flex min-h-18 cursor-pointer items-center gap-3 border-b border-slate-100 py-3 last:border-0"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">{icon}</span><span className="min-w-0 flex-1"><strong className="block text-sm text-slate-800">{label}</strong><small className="mt-0.5 block text-xs leading-4 text-slate-500">{description}</small></span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="peer sr-only" /><span className="relative h-7 w-12 shrink-0 rounded-full bg-slate-200 transition peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-400 peer-checked:bg-indigo-600 after:absolute after:left-1 after:top-1 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition peer-checked:after:translate-x-5" /></label>
 }
 
-function ThemeOption({ label, description, icon, current = false }: { label: string; description: string; icon: React.ReactNode; current?: boolean }) {
-  return <button type="button" disabled={!current} aria-pressed={current} className={`relative min-h-32 rounded-2xl border p-3 text-left ${current ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm' : 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400'}`}>
-    <span className={`grid h-10 w-10 place-items-center rounded-xl ${current ? 'bg-white text-indigo-600' : 'bg-slate-200/70 text-slate-400'}`}>{icon}</span>
+function ThemeOption({ label, description, icon, selected, onSelect, colors }: { label: string; description: string; icon: React.ReactNode; selected: boolean; onSelect: () => void; colors: [string, string, string] }) {
+  return <button type="button" onClick={onSelect} aria-pressed={selected} className={`relative min-h-36 rounded-2xl border p-3 text-left transition ${selected ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm ring-2 ring-indigo-100' : 'border-slate-200 bg-white text-slate-600'}`}>
+    <span className={`grid h-10 w-10 place-items-center rounded-xl ${selected ? 'bg-white text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>{icon}</span>
     <strong className="mt-3 block text-sm">{label}</strong>
     <small className="mt-1 block text-xs leading-4">{description}</small>
-    {current ? <span className="absolute right-2 top-2 rounded-full bg-indigo-600 px-2 py-1 text-[10px] font-bold text-white">Atual</span> : <span className="absolute right-2 top-2" title="Em desenvolvimento"><Construction size={16} /></span>}
+    <span className="mt-3 flex gap-1.5">{colors.map((color) => <i key={color} className="h-3 flex-1 rounded-full" style={{ background: color }} />)}</span>
+    {selected && <span className="absolute right-2 top-2 rounded-full bg-indigo-600 px-2 py-1 text-[10px] font-bold text-white">Selecionado</span>}
   </button>
 }
 
@@ -35,6 +37,7 @@ export function ProfileScreen({ user, onBack, updated, logout }: { user: UserDto
   const [cameraStatus, setCameraStatus] = useState('Ainda não testada')
   const [testingCamera, setTestingCamera] = useState(false)
   const [passwordsOpen, setPasswordsOpen] = useState(false)
+  const [devicePreferences, setDevicePreferences] = useState<DevicePreferences>(readDevicePreferences)
   const { register, handleSubmit, control, setValue, reset, formState: { errors, isSubmitting } } = useForm<ProfileInput>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
@@ -47,6 +50,18 @@ export function ProfileScreen({ user, onBack, updated, logout }: { user: UserDto
     },
   })
   const settings = useWatch({ control, name: 'settings' })
+  const selectedTheme = settings.theme === 'dark' ? 'dark' : 'light'
+
+  useEffect(() => {
+    applyThemePreference(selectedTheme)
+    return () => applyThemePreference(user.settings.theme)
+  }, [selectedTheme, user.settings.theme])
+
+  function updateDevicePreference(key: keyof DevicePreferences, value: boolean) {
+    const next = { ...devicePreferences, [key]: value }
+    setDevicePreferences(next)
+    saveDevicePreferences(next)
+  }
   const save = handleSubmit(async (values) => {
     try {
       setSaveMessage('')
@@ -82,13 +97,12 @@ export function ProfileScreen({ user, onBack, updated, logout }: { user: UserDto
 
     <form onSubmit={save} className="grid gap-4">
       <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-        <SectionHeader icon={<Palette size={20} />} title="Aparência" description="O visual atual continua ativo enquanto preparamos novos temas." />
-        <div className="grid grid-cols-3 gap-2">
-          <ThemeOption current label="Claro" description="Tema atual" icon={<Sun size={20} />} />
-          <ThemeOption label="Escuro" description="Em desenvolvimento" icon={<Moon size={20} />} />
-          <ThemeOption label="Automático" description="Em desenvolvimento" icon={<MonitorCog size={20} />} />
+        <SectionHeader icon={<Palette size={20} />} title="Aparência" description="Dois temas próprios, desenhados para manter a identidade do aplicativo." />
+        <div className="grid grid-cols-2 gap-2">
+          <ThemeOption selected={selectedTheme === 'light'} onSelect={() => setValue('settings.theme', 'light', { shouldDirty: true })} label="Claro Vivo" description="Lavanda suave e superfícies luminosas" icon={<Sun size={20} />} colors={['#F5F6FB', '#FFFFFF', '#635BFF']} />
+          <ThemeOption selected={selectedTheme === 'dark'} onSelect={() => setValue('settings.theme', 'dark', { shouldDirty: true })} label="Escuro Aurora" description="Azul profundo com acentos violetas" icon={<Moon size={20} />} colors={['#080D18', '#121B2E', '#8B83FF']} />
         </div>
-        <div className="mt-3 flex items-start gap-2 rounded-2xl bg-amber-50 p-3 text-amber-800"><Construction className="mt-0.5 shrink-0" size={18} /><p className="text-xs leading-5"><strong className="block">Temas em desenvolvimento</strong>Escuro e automático aparecem aqui para você saber o que vem depois, mas ainda não alteram o aplicativo.</p></div>
+        <div className="mt-3 flex items-start gap-2 rounded-2xl bg-indigo-50 p-3 text-indigo-700"><Sparkles className="mt-0.5 shrink-0" size={18} /><p className="text-xs leading-5">A troca aparece imediatamente para você experimentar. Use <strong>Salvar alterações</strong> para manter o tema na conta.</p></div>
       </section>
 
       <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -108,7 +122,13 @@ export function ProfileScreen({ user, onBack, updated, logout }: { user: UserDto
         <SwitchField label="Notificações" description="Permitir avisos importantes do aplicativo" icon={<Bell size={18} />} checked={settings.notificationsEnabled} onChange={(value) => setValue('settings.notificationsEnabled', value, { shouldDirty: true })} />
         <SwitchField label="Resumo mensal" description="Avisar quando a análise do mês estiver pronta" icon={<CheckCircle2 size={18} />} checked={settings.monthlySummaryEnabled} onChange={(value) => setValue('settings.monthlySummaryEnabled', value, { shouldDirty: true })} />
         <SwitchField label="Alertas de preço" description="Sinalizar valores fora do seu histórico" icon={<Bell size={18} />} checked={settings.priceAlertsEnabled} onChange={(value) => setValue('settings.priceAlertsEnabled', value, { shouldDirty: true })} />
-        <SwitchField label="Interface compacta" description="Reduzir espaçamentos dentro do app" icon={<Smartphone size={18} />} checked={settings.compactMode} onChange={(value) => setValue('settings.compactMode', value, { shouldDirty: true })} />
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white px-4 shadow-sm">
+        <div className="flex items-start gap-3 border-b border-slate-100 py-4"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-violet-50 text-violet-600"><Accessibility size={20} /></span><div><h2 className="text-base font-black text-slate-950">Acessibilidade</h2><p className="mt-1 text-xs text-slate-500">Preferências aplicadas e salvas neste dispositivo.</p></div></div>
+        <SwitchField label="Texto ampliado" description="Aumentar textos e controles principais" icon={<ZoomIn size={18} />} checked={devicePreferences.largeText} onChange={(value) => updateDevicePreference('largeText', value)} />
+        <SwitchField label="Contraste reforçado" description="Destacar textos, bordas e campos" icon={<Eye size={18} />} checked={devicePreferences.highContrast} onChange={(value) => updateDevicePreference('highContrast', value)} />
+        <SwitchField label="Reduzir animações" description="Diminuir movimentos e transições" icon={<Sparkles size={18} />} checked={devicePreferences.reduceMotion} onChange={(value) => updateDevicePreference('reduceMotion', value)} />
       </section>
 
       {saveMessage && <p role="status" className={`rounded-2xl p-3 text-sm ${saveMessage.includes('salvos') ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>{saveMessage}</p>}

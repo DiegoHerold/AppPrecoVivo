@@ -136,7 +136,7 @@ export function CameraCapture({ initialFacingMode, onBack, analyzePhoto, cancelA
 
   const galleryButton = <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-white/10 px-3 text-sm font-semibold text-white/85"><ImagePlus size={17} /> Galeria<input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={selectGalleryFile} /></label>
 
-  return <div className="flex h-full flex-col bg-[#08080B] text-white">
+  return <div className="theme-native-dark flex h-full flex-col bg-[#08080B] text-white">
     <header className="flex h-16 items-center justify-between border-b border-white/10 px-4"><button aria-label="Cancelar importação" onClick={close} className="grid h-11 w-11 place-items-center rounded-full bg-white/10"><X size={19} /></button><div className="text-center"><strong className="block text-sm">Ler QR Code</strong><small className="text-xs text-white/45">1 foto · depois você revisa</small></div><button aria-label="Trocar câmera" onClick={() => void switchCamera()} disabled={state !== 'active'} className="grid h-11 w-11 place-items-center rounded-full bg-white/10 disabled:opacity-30"><SwitchCamera size={19} /></button></header>
     <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black">
       <video ref={videoRef} muted playsInline className={`h-full w-full object-cover ${facingMode === 'user' ? '-scale-x-100' : ''} ${state === 'active' ? 'block' : 'hidden'}`} />
