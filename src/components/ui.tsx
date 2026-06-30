@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { BarChart3, Camera, CheckCircle2, ChevronLeft, Home, Package, RefreshCw } from 'lucide-react'
 import type { AppScreen, BehaviorType } from '@/lib/client-types'
 
@@ -16,7 +16,7 @@ export const BEHAVIORS: Record<BehaviorType, { label: string; icon: string; colo
 
 export function BehaviorBadge({ behavior }: { behavior: BehaviorType }) {
   const item = BEHAVIORS[behavior]
-  return <span className="inline-flex min-h-8 w-fit items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold" style={{ color: item.color, background: item.bg }}>{item.icon} {item.label}</span>
+  return <span className="behavior-tone inline-flex min-h-8 w-fit items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold" style={{ '--tone-color': item.color, '--tone-bg': item.bg } as CSSProperties}>{item.icon} {item.label}</span>
 }
 
 export function PageHeader({ title, subtitle, onBack, action }: { title: string; subtitle?: string; onBack?: () => void; action?: ReactNode }) {

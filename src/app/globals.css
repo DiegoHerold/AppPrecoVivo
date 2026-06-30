@@ -62,6 +62,8 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
 .app-shell .text-slate-400 { color: #64748b; }
 .app-shell .text-slate-500 { color: #475569; }
 .scanner-grid { background-image: linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.055) 1px, transparent 1px); background-size: 54px 54px; }
+.processing-surface { background: radial-gradient(circle at 50% 15%, #edebff, transparent 27%), #f7f8fc; }
+.behavior-tone { color: var(--tone-color); background: var(--tone-bg); }
 .scan-frame i { position: absolute; width: 27px; height: 27px; border-color: white; border-style: solid; }
 .scan-frame i:nth-child(1) { left: 0; top: 0; border-width: 2px 0 0 2px; border-radius: 7px 0 0; }
 .scan-frame i:nth-child(2) { right: 0; top: 0; border-width: 2px 2px 0 0; border-radius: 0 7px 0 0; }
@@ -81,19 +83,28 @@ button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-colo
 [data-theme="dark"] .app-surface { background-color: var(--app-surface); }
 [data-theme="dark"] :is(.bg-white, .bg-slate-50) { background-color: var(--surface) !important; }
 [data-theme="dark"] :is(.bg-slate-100, .bg-slate-200) { background-color: var(--surface-soft) !important; }
+[data-theme="dark"] :is(.bg-white\/95, .bg-slate-50\/70) { background-color: rgb(18 27 46 / .95) !important; }
 [data-theme="dark"] :is(.text-slate-950, .text-slate-900, .text-slate-800) { color: var(--text-strong) !important; }
 [data-theme="dark"] :is(.text-slate-700, .text-slate-600, .text-slate-500) { color: var(--text-body) !important; }
-[data-theme="dark"] .text-slate-400 { color: var(--text-muted) !important; }
+[data-theme="dark"] :is(.text-slate-300, .text-slate-400) { color: var(--text-muted) !important; }
 [data-theme="dark"] :is(.border-slate-100, .border-slate-200, .border-slate-300) { border-color: var(--border) !important; }
-[data-theme="dark"] :is(.bg-indigo-50, .bg-violet-50) { background-color: #232345 !important; }
-[data-theme="dark"] :is(.bg-emerald-50, .bg-cyan-50) { background-color: #102d2c !important; }
-[data-theme="dark"] .bg-amber-50 { background-color: #332812 !important; }
-[data-theme="dark"] .bg-rose-50 { background-color: #351a28 !important; }
+[data-theme="dark"] .border-slate-200\/80 { border-color: rgb(41 54 80 / .8) !important; }
+[data-theme="dark"] :is(.bg-indigo-50, .bg-indigo-100, .bg-violet-50, .bg-violet-100) { background-color: #25264d !important; }
+[data-theme="dark"] :is(.bg-emerald-50, .bg-emerald-100, .bg-cyan-50, .bg-cyan-100) { background-color: #123733 !important; }
+[data-theme="dark"] :is(.bg-amber-50, .bg-amber-100) { background-color: #3b2e13 !important; }
+[data-theme="dark"] :is(.bg-rose-50, .bg-rose-100) { background-color: #3d1d2c !important; }
+[data-theme="dark"] :is(.border-indigo-100, .border-indigo-200, .border-indigo-300, .border-violet-100, .border-violet-200) { border-color: #4a4784 !important; }
+[data-theme="dark"] :is(.border-emerald-100, .border-emerald-200, .border-cyan-100, .border-cyan-200) { border-color: #285f59 !important; }
+[data-theme="dark"] :is(.border-amber-100, .border-amber-200, .border-rose-100, .border-rose-200) { border-color: #684357 !important; }
 [data-theme="dark"] :is(.text-indigo-600, .text-indigo-700, .text-violet-600, .text-violet-700) { color: #aaa5ff !important; }
-[data-theme="dark"] :is(.text-emerald-600, .text-emerald-700, .text-emerald-800) { color: #6ee7c2 !important; }
-[data-theme="dark"] :is(.text-amber-600, .text-amber-700, .text-amber-800, .text-amber-900) { color: #f6c85f !important; }
-[data-theme="dark"] :is(.text-rose-600, .text-rose-700) { color: #fb91b5 !important; }
+[data-theme="dark"] :is(.text-emerald-600, .text-emerald-700, .text-emerald-800, .text-emerald-900, .text-cyan-600, .text-cyan-700, .text-cyan-800, .text-cyan-900) { color: #70e8cf !important; }
+[data-theme="dark"] :is(.text-amber-600, .text-amber-700, .text-amber-800, .text-amber-900, .text-amber-950) { color: #ffd477 !important; }
+[data-theme="dark"] :is(.text-rose-600, .text-rose-700, .text-rose-800, .text-rose-900, .text-rose-950) { color: #ff9cbd !important; }
+[data-theme="dark"] .ring-indigo-100 { --tw-ring-color: #4a4784 !important; }
+[data-theme="dark"] .processing-surface { background: radial-gradient(circle at 50% 15%, rgb(139 131 255 / .2), transparent 30%), var(--app-surface); }
+[data-theme="dark"] .behavior-tone { color: color-mix(in srgb, var(--tone-color) 45%, white); background: color-mix(in srgb, var(--tone-color) 18%, var(--surface)); }
 [data-theme="dark"] .bottom-navigation { border-color: var(--border) !important; background: rgba(18, 27, 46, .96) !important; }
+[data-theme="dark"] .bottom-navigation .border-white { border-color: var(--surface) !important; }
 [data-theme="dark"] .app-shell-dark { background: #08080b; }
 [data-theme="dark"] .theme-native-dark .bg-white { background-color: #ffffff !important; }
 
