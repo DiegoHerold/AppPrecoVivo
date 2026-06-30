@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizePostgresConnectionString } from './postgres-connection'
+import { normalizePostgresConnectionString, resolveMigrationDatabaseConnectionString, resolveRuntimeDatabaseConnectionString } from './postgres-connection'
 
 test('torna explícita a validação completa usada pelo pg atual', () => {
   for (const sslMode of ['prefer', 'require', 'verify-ca']) {
@@ -21,4 +21,14 @@ test('respeita modos explícitos e a opção de compatibilidade com libpq', () =
 test('mantém URLs locais sem configuração SSL', () => {
   const local = 'postgresql://postgres:secret@localhost:5432/app?schema=public'
   assert.equal(normalizePostgresConnectionString(local), local)
+})
+
+test('runtime usa pool e migrations usam conexão direta', () => {
+  const environment = {
+    DATABASE_URL: 'postgresql://runtime.example.com/app',
+    DATABASE_URL_UNPOOLED: 'postgresql://direct.example.com/app',
+    POSTGRES_PRISMA_URL: 'postgresql://pool.example.com/app',
+  }
+  assert.equal(resolveRuntimeDatabaseConnectionString(environment), environment.DATABASE_URL)
+  assert.equal(resolveMigrationDatabaseConnectionString(environment), environment.DATABASE_URL_UNPOOLED)
 })

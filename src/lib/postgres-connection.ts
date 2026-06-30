@@ -19,3 +19,24 @@ export function normalizePostgresConnectionString(value: string | undefined) {
     return value
   }
 }
+
+export function resolveRuntimeDatabaseConnectionString(environment: Record<string, string | undefined>) {
+  return normalizePostgresConnectionString(
+    environment.DATABASE_URL ??
+    environment.POSTGRES_PRISMA_URL ??
+    environment.POSTGRES_URL ??
+    environment.DATABASE_URL_UNPOOLED ??
+    environment.POSTGRES_URL_NON_POOLING,
+  )
+}
+
+export function resolveMigrationDatabaseConnectionString(environment: Record<string, string | undefined>) {
+  return normalizePostgresConnectionString(
+    environment.DIRECT_URL ??
+    environment.DATABASE_URL_UNPOOLED ??
+    environment.POSTGRES_URL_NON_POOLING ??
+    environment.DATABASE_URL ??
+    environment.POSTGRES_PRISMA_URL ??
+    environment.POSTGRES_URL,
+  )
+}

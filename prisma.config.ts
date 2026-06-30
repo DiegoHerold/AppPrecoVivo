@@ -2,7 +2,7 @@
 // npm install --save-dev prisma dotenv
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
-import { normalizePostgresConnectionString } from "./src/lib/postgres-connection";
+import { resolveMigrationDatabaseConnectionString } from "./src/lib/postgres-connection";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -11,14 +11,7 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    // Para migrações, prefira a conexão DIRETA (não-pooled). Aceita os nomes
-    // que a Vercel/Neon costuma injetar, evitando "datasource.url is required".
-    url: normalizePostgresConnectionString(
-      process.env["DATABASE_URL_UNPOOLED"] ??
-      process.env["POSTGRES_URL_NON_POOLING"] ??
-      process.env["DATABASE_URL"] ??
-      process.env["POSTGRES_PRISMA_URL"] ??
-      process.env["POSTGRES_URL"],
-    ),
+    // Migrations usam conexão direta; o runtime serverless continua pooled.
+    url: resolveMigrationDatabaseConnectionString(process.env),
   },
 });
