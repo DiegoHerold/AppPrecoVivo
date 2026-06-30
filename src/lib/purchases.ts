@@ -1,55 +1,12 @@
-import type { BehaviorType, ImportInputType, Prisma } from '@/generated/prisma/client'
+import type { BehaviorType, ImportInputType } from '@/generated/prisma/client'
 import { prisma } from '@/lib/prisma'
-import { classificationSimilarity, estimateProductDuration, normalizeProductName, suggestLearnedCategory, textSimilarity } from '@/lib/domain'
+import { estimateProductDuration, normalizeProductName } from '@/lib/domain'
 import { accessKeyFrom, importerFor, ManualTextImporter } from '@/lib/importers'
 import { manualPurchaseSchema, pendingImportSchema, rawTextImportSchema } from '@/lib/validation'
 import { recalculatePurchaseMonth } from '@/lib/monthly-flow'
 import { syncInferenceEventsForUser } from '@/services/inference-events.service'
 import { createProdutoWithNode } from '@/lib/plano-contas'
-
-type Tx = Prisma.TransactionClient
-
-export async function matchProductByAlias(tx: Tx, userId: string, rawName: string) {
-  const normalized = normalizeProductName(rawName)
-  const exact = await tx.productAlias.findFirst({
-    where: { normalizedAliasName: normalized, product: { userId, active: true } },
-    include: { product: { include: { node: true } } },
-  })
-  if (exact) {
-    if (!exact.product.node) throw new Error('Produto sem nó correspondente no plano de contas.')
-    return { product: exact.product, node: exact.product.node, confidence: 0.99 }
-  }
-
-  const products = await tx.product.findMany({
-    where: { userId, active: true },
-    include: { node: true, aliases: { select: { aliasName: true } } },
-  })
-  let best: (typeof products)[number] | null = null
-  let confidence = 0
-  for (const product of products) {
-    const candidates = [product.standardName, ...product.aliases.map((alias) => alias.aliasName)]
-    const score = Math.max(...candidates.map((candidate) => {
-      const textual = textSimilarity(candidate, rawName)
-      return Math.max(textual, textual * 0.72 + classificationSimilarity(candidate, rawName) * 0.28)
-    }))
-    if (score > confidence) { best = product; confidence = score }
-  }
-  if (!best || confidence < 0.78) return null
-  if (!best.node) throw new Error('Produto sem nó correspondente no plano de contas.')
-  return { product: best, node: best.node, confidence }
-}
-
-async function learnedGroupFor(tx: Tx, userId: string, rawName: string) {
-  const products = await tx.product.findMany({
-    where: { userId, active: true, classificationConfirmed: true },
-    include: { node: { select: { parentId: true } }, aliases: { select: { aliasName: true } } },
-  })
-  const learned = suggestLearnedCategory(rawName, products.flatMap((product) => (product.node?.parentId
-    ? [{ categoryId: product.node.parentId, names: [product.standardName, ...product.aliases.map((alias) => alias.aliasName)] }]
-    : [])))
-  if (!learned) return null
-  return { groupId: learned.categoryId, confidence: Math.min(0.94, Math.round((0.68 + learned.score * 0.28) * 100) / 100) }
-}
+import { learnedGroupFor, matchProductByAlias, type ProductMatchCandidate } from '@/lib/product-matching'
 
 type ManualInput = ReturnType<typeof manualPurchaseSchema.parse>
 type PurchaseSource = {
@@ -70,6 +27,32 @@ async function persistManualPurchase(userId: string, input: ManualInput, source:
       throw new Error('Um dos grupos não pertence à sua conta.')
     }
 
+    const productCatalog: ProductMatchCandidate[] = await tx.product.findMany({
+      where: { userId, active: true },
+      select: {
+        id: true,
+        standardName: true,
+        behaviorType: true,
+        estimatedDurationMonths: true,
+        classificationConfirmed: true,
+        node: { select: { id: true, parentId: true } },
+        aliases: { select: { aliasName: true, normalizedAliasName: true } },
+      },
+    })
+    const orderGroupIds = new Set(groupIds)
+    for (const product of productCatalog) {
+      if (product.node?.parentId) orderGroupIds.add(product.node.parentId)
+    }
+    const childOrders = await tx.planoConta.findMany({
+      where: { userId, parentId: { in: [...orderGroupIds] } },
+      select: { parentId: true, ordem: true },
+      orderBy: { ordem: 'desc' },
+    })
+    const nextOrderByGroup = new Map<string, number>()
+    for (const child of childOrders) {
+      if (child.parentId && !nextOrderByGroup.has(child.parentId)) nextOrderByGroup.set(child.parentId, child.ordem + 1)
+    }
+
     const store = await tx.store.create({
       data: {
         name: input.storeName,
@@ -82,7 +65,7 @@ async function persistManualPurchase(userId: string, input: ManualInput, source:
 
     const resolvedItems = []
     for (const item of input.items) {
-      const match = await matchProductByAlias(tx, userId, item.rawName)
+      const match = matchProductByAlias(productCatalog, item.rawName)
       if (match) {
         resolvedItems.push({
           ...item,
@@ -96,17 +79,30 @@ async function persistManualPurchase(userId: string, input: ManualInput, source:
         continue
       }
 
-      const learned = await learnedGroupFor(tx, userId, item.rawName)
+      const learned = learnedGroupFor(productCatalog, item.rawName)
       const manuallyClassified = source.inputType === 'manual'
       const confidence = manuallyClassified ? 1 : learned?.confidence ?? 0.45
+      const groupId = learned?.groupId ?? item.categoryId
+      const ordem = nextOrderByGroup.get(groupId) ?? 0
       const { product, node } = await createProdutoWithNode(tx, userId, {
         standardName: item.rawName,
-        groupId: learned?.groupId ?? item.categoryId,
+        groupId,
         behaviorType: item.behaviorType,
         estimatedDurationMonths: item.estimatedDurationMonths,
         defaultUnit: item.unit,
         classificationConfirmed: manuallyClassified,
         active: true,
+        ordem,
+      })
+      nextOrderByGroup.set(groupId, ordem + 1)
+      productCatalog.push({
+        id: product.id,
+        standardName: product.standardName,
+        behaviorType: product.behaviorType,
+        estimatedDurationMonths: product.estimatedDurationMonths,
+        classificationConfirmed: product.classificationConfirmed,
+        node: { id: node.id, parentId: node.parentId },
+        aliases: [],
       })
       resolvedItems.push({ ...item, productId: product.id, planoContaId: node.id, confidence, needsReview: !manuallyClassified && confidence < 0.85 })
     }
@@ -144,7 +140,7 @@ async function persistManualPurchase(userId: string, input: ManualInput, source:
       select: { id: true, purchaseDate: true, importJobs: { select: { status: true, errorMessage: true } } },
     })
     return created
-  })
+  }, { maxWait: 10_000, timeout: 20_000 })
 
   await recalculatePurchaseMonth(userId, purchase.purchaseDate)
   await syncInferenceEventsForUser(userId)

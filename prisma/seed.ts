@@ -3,8 +3,9 @@ import { hash } from 'bcryptjs'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../src/generated/prisma/client'
 import { createInitialPlanoContas, INITIAL_GROUPS } from '../src/lib/plano-contas-seed'
+import { normalizePostgresConnectionString } from '../src/lib/postgres-connection'
 
-const connectionString = process.env.DATABASE_URL
+const connectionString = normalizePostgresConnectionString(process.env.DATABASE_URL)
 if (!connectionString) throw new Error('DATABASE_URL não configurada.')
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) })

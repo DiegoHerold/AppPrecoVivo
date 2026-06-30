@@ -203,6 +203,7 @@ export type NewProductInput = {
   active?: boolean
   brand?: string | null
   packageSize?: string | null
+  ordem?: number
 }
 
 /** Cria Product + nó PRODUTO atomicamente. Garante "1 conta por produto" via produtoId @unique. */
@@ -228,7 +229,7 @@ export async function createProdutoWithNode(tx: Prisma.TransactionClient, userId
       parentId: input.groupId,
       produtoId: product.id,
       ativo: product.active,
-      ordem: await nextOrdem(tx, userId, input.groupId),
+      ordem: input.ordem ?? await nextOrdem(tx, userId, input.groupId),
       icone: '📦',
       cor: '#10B981',
     },
