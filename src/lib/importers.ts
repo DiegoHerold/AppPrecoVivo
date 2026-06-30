@@ -46,7 +46,7 @@ const officialNfceHosts = new Set([
   'dfe-portal.svrs.rs.gov.br',
 ])
 
-class ImportFailure extends Error {
+export class ImportFailure extends Error {
   constructor(message: string, public code: ImportErrorCode) {
     super(message)
     this.name = 'ImportFailure'

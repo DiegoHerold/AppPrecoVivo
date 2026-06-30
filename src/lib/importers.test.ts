@@ -7,6 +7,7 @@ import path from 'node:path'
 import { BarcodeFormat, QRCodeWriter } from '@zxing/library'
 import sharp from 'sharp'
 import { AccessKeyImporter, accessKeyFrom, decodeQrFromImage, isValidAccessKey, ManualTextImporter, parseNfceHtml } from './importers'
+import { pendingImportSchema } from './validation'
 
 test('texto manual vira itens reais sem inventar linhas', async () => {
   const result = await new ManualTextImporter().import('Leite integral | 2 | 4,89 | un')
@@ -26,6 +27,12 @@ test('valida a chave e extrai do QR Code da NFC-e', () => {
   const key = '43260607718633002041650020008588731426827342'
   assert.equal(isValidAccessKey(key), true)
   assert.equal(accessKeyFrom('https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=' + key + '|3|1'), key)
+})
+
+test('importação fiscal aceita somente o valor textual, sem imagem ou fileUrl', () => {
+  const inputValue = 'https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=43260607718633002041650020008588731426827342|3|1'
+  assert.equal(pendingImportSchema.safeParse({ inputType: 'qr_code_url', inputValue, purchaseDate: '2026-06-30' }).success, true)
+  assert.equal(pendingImportSchema.safeParse({ inputType: 'image', inputValue: '/api/uploads/abc', purchaseDate: '2026-06-30' }).success, false)
 })
 
 test('lê os itens retornados pela página oficial sem criar dados fictícios', () => {

@@ -7,6 +7,9 @@ import { prisma } from '@/lib/prisma'
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const [user, { id }] = await Promise.all([requireUser(), context.params])
+    if (process.env.VERCEL) {
+      return Response.json({ error: 'Fotos antigas não ficam disponíveis no ambiente serverless.' }, { status: 410 })
+    }
     const uploaded = await prisma.uploadedFile.findFirst({ where: { id, userId: user.id } })
     if (!uploaded) return Response.json({ error: 'Arquivo não encontrado.' }, { status: 404 })
 

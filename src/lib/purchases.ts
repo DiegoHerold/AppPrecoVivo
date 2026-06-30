@@ -1,5 +1,4 @@
 import type { BehaviorType, ImportInputType, Prisma } from '@/generated/prisma/client'
-import path from 'node:path'
 import { prisma } from '@/lib/prisma'
 import { classificationSimilarity, estimateProductDuration, normalizeProductName, suggestLearnedCategory, textSimilarity } from '@/lib/domain'
 import { accessKeyFrom, importerFor, ManualTextImporter } from '@/lib/importers'
@@ -56,7 +55,6 @@ type ManualInput = ReturnType<typeof manualPurchaseSchema.parse>
 type PurchaseSource = {
   inputType: ImportInputType
   inputValue?: string | null
-  fileUrl?: string | null
   message?: string | null
 }
 
@@ -140,7 +138,7 @@ async function persistManualPurchase(userId: string, input: ManualInput, source:
           })),
         },
         importJobs: {
-          create: { userId, inputType: source.inputType, inputValue: source.inputValue, fileUrl: source.fileUrl, status: 'concluida', errorMessage: source.message },
+          create: { userId, inputType: source.inputType, inputValue: source.inputValue, status: 'concluida', errorMessage: source.message },
         },
       },
       select: { id: true, purchaseDate: true, importJobs: { select: { status: true, errorMessage: true } } },
@@ -216,23 +214,14 @@ export async function createPendingImport(userId: string, unknownInput: unknown)
     message: 'Esta NFC-e já foi importada. Nenhum dado foi duplicado.',
     errorCode: 'already_imported' as const,
   })
-  const directKey = accessKeyFrom(input.inputValue ?? input.accessKey ?? input.nfceUrl ?? '')
+  const directKey = accessKeyFrom(input.inputValue)
   if (directKey) {
     const existing = await findExisting(directKey)
     if (existing) return duplicateResponse(existing)
   }
 
   const importer = importerFor(input.inputType as ImportInputType)
-  let importerInput = input.inputValue ?? input.fileUrl ?? ''
-  if (input.inputType === 'image') {
-    const uploadId = input.fileUrl?.match(/^\/api\/uploads\/([^/?#]+)$/)?.[1]
-    const uploaded = uploadId ? await prisma.uploadedFile.findFirst({ where: { id: uploadId, userId } }) : null
-    if (!uploaded) throw new Error('A foto enviada não foi encontrada na sua conta.')
-    const root = path.resolve(process.cwd(), 'storage', 'uploads')
-    const absolutePath = path.resolve(root, uploaded.storagePath)
-    if (!absolutePath.startsWith(root + path.sep)) throw new Error('Caminho de foto inválido.')
-    importerInput = absolutePath
-  }
+  const importerInput = input.inputValue
   const result = await importer.import(importerInput)
   if (result.status === 'concluida' && result.items?.length && result.receipt) {
     const existing = await findExisting(result.receipt.accessKey)
@@ -258,8 +247,7 @@ export async function createPendingImport(userId: string, unknownInput: unknown)
         items,
       }, {
         inputType: input.inputType as ImportInputType,
-        inputValue: input.inputValue,
-        fileUrl: input.fileUrl,
+        inputValue: importerInput,
         message: result.message,
       })
       return { ...purchase, imported: true, duplicate: false, itemCount: result.items.length, message: result.message, accessKey: result.receipt.accessKey }
@@ -275,8 +263,7 @@ export async function createPendingImport(userId: string, unknownInput: unknown)
     data: {
       userId,
       inputType: input.inputType,
-      inputValue: input.inputValue || input.accessKey || input.nfceUrl || null,
-      fileUrl: input.fileUrl || null,
+      inputValue: importerInput || null,
       status: result.status,
       errorMessage: result.message,
     },

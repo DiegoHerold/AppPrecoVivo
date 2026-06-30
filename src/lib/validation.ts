@@ -121,12 +121,9 @@ export const rawTextImportSchema = z.object({
 })
 
 export const pendingImportSchema = z.object({
-  inputType: z.enum(['image', 'pdf', 'access_key', 'nfce_url', 'qr_code_url']),
-  inputValue: z.string().trim().optional(),
-  fileUrl: z.string().trim().optional(),
+  inputType: z.enum(['access_key', 'nfce_url', 'qr_code_url']),
+  inputValue: z.string().trim().min(1).max(2048),
   purchaseDate: z.iso.date(),
-  accessKey: z.string().trim().optional(),
-  nfceUrl: z.string().trim().optional(),
 })
 
 export const reviewSchema = z.object({

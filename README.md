@@ -39,10 +39,10 @@ O seed cria somente uma conta local de desenvolvimento e seu plano de categorias
 
 - Cadastro manual: persiste compra e itens imediatamente.
 - Texto colado: aceita linhas no formato `produto | quantidade | unidade | preço unitário | categoria | comportamento`.
-- Chave, URL ou imagem: identifica o QR Code, valida a chave, consulta a NFC-e oficial e impede importações duplicadas. Quando a leitura falha, permite tentar outra foto, digitar a chave ou cadastrar manualmente sem criar uma compra vazia.
-- PDF: mantém a tarefa de recuperação manual; nenhum dado fiscal é inventado.
+- Chave, URL ou foto: a foto é lida no navegador, que envia somente o texto do QR Code para validação, consulta oficial e prevenção de duplicidade. Quando a leitura falha, permite tentar outra foto, digitar a chave ou cadastrar manualmente sem criar uma compra vazia.
+- O banco registra somente a URL/chave extraída. A imagem não é persistida nem na intranet nem na Vercel.
 
-Fotos capturadas e arquivos enviados são validados (tipo e limite de 10 MB), gravados em storage/uploads e servidos somente para o usuário autenticado. Em produção, monte esse diretório em volume persistente ou substitua-o por armazenamento de objetos.
+`/api/uploads` existe apenas como fallback de leitura para navegadores que não conseguirem decodificar a imagem. O cliente reduz a foto antes do envio; a API limita o payload, usa exclusivamente o diretório temporário do sistema (`/tmp` na Vercel) e apaga o arquivo no fim da mesma requisição. Uploads antigos continuam acessíveis somente em instalações locais, sem dependência de `storage` no fluxo atual.
 
 ## Plano de contas e relatórios
 
