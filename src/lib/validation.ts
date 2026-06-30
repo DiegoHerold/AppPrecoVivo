@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { themePresetValues } from '@/lib/themes'
 
 export const behaviorValues = [
   'recorrente_semanal',
@@ -42,6 +43,8 @@ export const profileSchema = z.object({
   state: z.string().trim().toUpperCase().length(2, 'Use a sigla do estado.').optional().or(z.literal('')),
   settings: z.object({
     theme: z.enum(['system', 'light', 'dark']),
+    themePreset: z.enum(themePresetValues),
+    favoriteThemes: z.array(z.enum(themePresetValues)).length(2, 'Escolha dois temas favoritos.').refine((themes) => new Set(themes).size === 2, 'Escolha dois temas diferentes.'),
     cameraFacingMode: z.enum(['environment', 'user']),
     notificationsEnabled: z.boolean(),
     monthlySummaryEnabled: z.boolean(),

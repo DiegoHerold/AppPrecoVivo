@@ -1,3 +1,5 @@
+import { getThemePreset } from '@/lib/themes'
+
 export type DevicePreferences = {
   largeText: boolean
   highContrast: boolean
@@ -33,7 +35,9 @@ export function saveDevicePreferences(preferences: DevicePreferences) {
   applyDevicePreferences(preferences)
 }
 
-export function applyThemePreference(theme: 'system' | 'light' | 'dark') {
+export function applyThemePreference(theme: 'system' | 'light' | 'dark', presetId?: string) {
   if (typeof document === 'undefined') return
-  document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light'
+  const preset = getThemePreset(presetId ?? (theme === 'dark' ? 'escuro_aurora' : 'claro_vivo'))
+  document.documentElement.dataset.theme = preset.mode
+  document.documentElement.dataset.themePreset = preset.id
 }

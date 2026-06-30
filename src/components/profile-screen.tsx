@@ -3,12 +3,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm, useWatch } from 'react-hook-form'
-import { Accessibility, Bell, Camera, CheckCircle2, ChevronDown, Eye, KeyRound, LogOut, MapPin, Moon, Palette, ShieldCheck, Smartphone, Sparkles, Sun, ZoomIn } from 'lucide-react'
+import { Accessibility, Bell, Camera, CheckCircle2, ChevronDown, Eye, KeyRound, LogOut, MapPin, Moon, Palette, Settings2, ShieldCheck, Smartphone, Sparkles, Sun, ZoomIn } from 'lucide-react'
 import { z } from 'zod'
 import { clientApi } from '@/lib/client-api'
 import { requestCamera } from '@/lib/camera'
 import type { UserDto } from '@/lib/client-types'
 import { applyThemePreference, readDevicePreferences, saveDevicePreferences, type DevicePreferences } from '@/lib/device-preferences'
+import { getThemePreset, THEME_PRESETS, type ThemePreset, type ThemePresetId } from '@/lib/themes'
 import { passwordChangeSchema, profileSchema } from '@/lib/validation'
 import { PageHeader, PrimaryButton } from './ui'
 
@@ -31,13 +32,13 @@ function SwitchField({ label, description, checked, onChange, icon }: { label: s
   return <label className="flex min-h-18 cursor-pointer items-center gap-3 border-b border-slate-100 py-3 last:border-0"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">{icon}</span><span className="min-w-0 flex-1"><strong className="block text-sm text-slate-800">{label}</strong><small className="mt-0.5 block text-xs leading-4 text-slate-500">{description}</small></span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="peer sr-only" /><span className="relative h-7 w-12 shrink-0 rounded-full bg-slate-200 transition peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-400 peer-checked:bg-indigo-600 after:absolute after:left-1 after:top-1 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition peer-checked:after:translate-x-5" /></label>
 }
 
-function ThemeOption({ label, description, icon, selected, onSelect, colors }: { label: string; description: string; icon: ReactNode; selected: boolean; onSelect: () => void; colors: [string, string, string] }) {
+function ThemeOption({ preset, selected, onSelect }: { preset: ThemePreset; selected: boolean; onSelect: () => void }) {
   return <button type="button" onClick={onSelect} aria-pressed={selected} className={`relative min-h-36 rounded-2xl border p-3 text-left transition ${selected ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm ring-2 ring-indigo-100' : 'border-slate-200 bg-white text-slate-600'}`}>
-    <span className={`grid h-10 w-10 place-items-center rounded-xl ${selected ? 'bg-white text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>{icon}</span>
-    <strong className="mt-3 block text-sm">{label}</strong>
-    <small className="mt-1 block text-xs leading-4">{description}</small>
-    <span className="mt-3 flex gap-1.5">{colors.map((color) => <i key={color} className="h-3 flex-1 rounded-full" style={{ background: color }} />)}</span>
-    {selected && <span className="absolute right-2 top-2 rounded-full bg-indigo-600 px-2 py-1 text-[10px] font-bold text-white">Selecionado</span>}
+    <span className={`grid h-10 w-10 place-items-center rounded-xl ${selected ? 'bg-white text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>{preset.mode === 'dark' ? <Moon size={19} /> : <Sun size={19} />}</span>
+    <strong className="mt-3 block text-sm">{preset.name}</strong>
+    <small className="mt-1 block text-xs leading-4">{preset.description}</small>
+    <span className="mt-3 flex gap-1.5">{preset.colors.map((color) => <i key={color} className="h-3 flex-1 rounded-full ring-1 ring-black/5" style={{ background: color }} />)}</span>
+    {selected && <span className="absolute right-2 top-2 rounded-full bg-indigo-600 px-2 py-1 text-[10px] font-bold text-white">Atual</span>}
   </button>
 }
 
@@ -46,6 +47,7 @@ export function ProfileScreen({ user, onBack, updated, logout }: { user: UserDto
   const [saveMessage, setSaveMessage] = useState('')
   const [cameraStatus, setCameraStatus] = useState('Ainda não testada')
   const [testingCamera, setTestingCamera] = useState(false)
+  const [themeEditorOpen, setThemeEditorOpen] = useState(false)
   const [devicePreferences, setDevicePreferences] = useState<DevicePreferences>(readDevicePreferences)
   const { register, handleSubmit, control, setValue, reset, formState: { errors, isSubmitting, isDirty } } = useForm<ProfileInput>({
     resolver: zodResolver(profileSchema),
@@ -59,12 +61,13 @@ export function ProfileScreen({ user, onBack, updated, logout }: { user: UserDto
     },
   })
   const settings = useWatch({ control, name: 'settings' })
-  const selectedTheme = settings.theme === 'dark' ? 'dark' : 'light'
+  const selectedPreset = getThemePreset(settings.themePreset)
+  const favoritePresets = settings.favoriteThemes.map(getThemePreset)
 
   useEffect(() => {
-    applyThemePreference(selectedTheme)
-    return () => applyThemePreference(user.settings.theme)
-  }, [selectedTheme, user.settings.theme])
+    applyThemePreference(selectedPreset.mode, selectedPreset.id)
+    return () => applyThemePreference(user.settings.theme, user.settings.themePreset)
+  }, [selectedPreset.id, selectedPreset.mode, user.settings.theme, user.settings.themePreset])
 
   function toggleSection(section: ProfileSection) {
     setOpenSection((current) => current === section ? null : section)
@@ -74,6 +77,19 @@ export function ProfileScreen({ user, onBack, updated, logout }: { user: UserDto
     const next = { ...devicePreferences, [key]: value }
     setDevicePreferences(next)
     saveDevicePreferences(next)
+  }
+
+  function selectTheme(id: ThemePresetId) {
+    const preset = getThemePreset(id)
+    setValue('settings.themePreset', preset.id, { shouldDirty: true })
+    setValue('settings.theme', preset.mode, { shouldDirty: true })
+  }
+
+  function changeFavorite(index: 0 | 1, id: ThemePresetId) {
+    const next = [...settings.favoriteThemes] as [ThemePresetId, ThemePresetId]
+    next[index] = id
+    if (next[0] === next[1]) return
+    setValue('settings.favoriteThemes', next, { shouldDirty: true })
   }
 
   const save = handleSubmit(async (values) => {
@@ -106,7 +122,7 @@ export function ProfileScreen({ user, onBack, updated, logout }: { user: UserDto
     <PageHeader title="Perfil e configurações" subtitle="Sua conta, aparência e preferências" onBack={onBack} />
 
     <form onSubmit={save} className="grid gap-4 py-4">
-      <section className="overflow-hidden rounded-3xl bg-[linear-gradient(145deg,#312E81,#635BFF)] text-white shadow-[0_14px_34px_rgba(67,56,202,.28)]">
+      <section className="accent-gradient overflow-hidden rounded-3xl text-white shadow-[0_14px_34px_rgba(67,56,202,.28)]">
         <button type="button" aria-expanded={openSection === 'personal'} aria-controls="profile-personal" onClick={() => toggleSection('personal')} className="flex min-h-28 w-full items-center gap-4 p-5 text-left">
           <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-white/15 text-2xl font-black ring-1 ring-white/20">{user.name.charAt(0).toUpperCase()}</span>
           <span className="min-w-0 flex-1"><small className="block text-xs font-bold uppercase tracking-wider text-white/65">Meus dados</small><strong className="mt-1 block truncate text-xl">{user.name}</strong><small className="mt-0.5 block truncate text-sm text-white/70">{user.email}</small><span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-bold text-emerald-100"><ShieldCheck size={13} /> Conta protegida</span></span>
@@ -118,11 +134,19 @@ export function ProfileScreen({ user, onBack, updated, logout }: { user: UserDto
         </div>}
       </section>
 
-      <AccordionSection id="profile-appearance" open={openSection === 'appearance'} onToggle={() => toggleSection('appearance')} icon={<Palette size={20} />} title="Aparência" description="Escolha entre os temas Claro Vivo e Escuro Aurora.">
+      <AccordionSection id="profile-appearance" open={openSection === 'appearance'} onToggle={() => toggleSection('appearance')} icon={<Palette size={20} />} title="Aparência" description="Seus dois temas favoritos e outras combinações seguras.">
+        <div className="mb-3 flex items-center justify-between gap-3"><div><strong className="block text-sm text-slate-900">Temas rápidos</strong><small className="text-xs text-slate-500">Toque para aplicar imediatamente</small></div><button type="button" aria-label="Configurar temas" aria-expanded={themeEditorOpen} onClick={() => setThemeEditorOpen((open) => !open)} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border transition ${themeEditorOpen ? 'border-indigo-300 bg-indigo-50 text-indigo-600' : 'border-slate-200 bg-slate-50 text-slate-400'}`}><Settings2 size={15} /></button></div>
         <div className="grid grid-cols-2 gap-2">
-          <ThemeOption selected={selectedTheme === 'light'} onSelect={() => setValue('settings.theme', 'light', { shouldDirty: true })} label="Claro Vivo" description="Lavanda suave e superfícies luminosas" icon={<Sun size={20} />} colors={['#F5F6FB', '#FFFFFF', '#635BFF']} />
-          <ThemeOption selected={selectedTheme === 'dark'} onSelect={() => setValue('settings.theme', 'dark', { shouldDirty: true })} label="Escuro Aurora" description="Azul profundo com acentos violetas" icon={<Moon size={20} />} colors={['#080D18', '#121B2E', '#8B83FF']} />
+          {favoritePresets.map((preset) => <ThemeOption key={preset.id} preset={preset} selected={selectedPreset.id === preset.id} onSelect={() => selectTheme(preset.id)} />)}
         </div>
+        {themeEditorOpen && <section className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-start gap-2"><ShieldCheck className="mt-0.5 shrink-0 text-emerald-600" size={16} /><p className="text-xs leading-5 text-slate-600"><strong className="text-slate-800">Personalização protegida.</strong> Todas as combinações têm contraste revisado; cores livres ficam bloqueadas.</p></div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {([0, 1] as const).map((index) => <label key={index} className="form-label">Atalho {index + 1}<select value={settings.favoriteThemes[index]} onChange={(event) => changeFavorite(index, event.target.value as ThemePresetId)} className="form-input"><optgroup label="Temas claros">{THEME_PRESETS.filter((preset) => preset.mode === 'light').map((preset) => <option key={preset.id} value={preset.id} disabled={settings.favoriteThemes[1 - index] === preset.id}>{preset.name}</option>)}</optgroup><optgroup label="Temas escuros">{THEME_PRESETS.filter((preset) => preset.mode === 'dark').map((preset) => <option key={preset.id} value={preset.id} disabled={settings.favoriteThemes[1 - index] === preset.id}>{preset.name}</option>)}</optgroup></select></label>)}
+          </div>
+          <p className="mb-2 mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">Todas as combinações</p>
+          <div className="grid grid-cols-2 gap-2">{THEME_PRESETS.map((preset) => <button key={preset.id} type="button" onClick={() => selectTheme(preset.id)} aria-pressed={selectedPreset.id === preset.id} className={`rounded-xl border p-2.5 text-left transition ${selectedPreset.id === preset.id ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200' : 'border-slate-200 bg-white'}`}><span className="flex items-center justify-between gap-2"><strong className="truncate text-xs text-slate-800">{preset.name}</strong><small className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">{preset.mode === 'dark' ? 'Escuro' : 'Claro'}</small></span><span className="mt-2 flex gap-1">{preset.colors.map((color) => <i key={color} className="h-4 flex-1 rounded-md ring-1 ring-black/5" style={{ background: color }} />)}</span></button>)}</div>
+        </section>}
         <div className="mt-3 flex items-start gap-2 rounded-2xl bg-indigo-50 p-3 text-indigo-700"><Sparkles className="mt-0.5 shrink-0" size={18} /><p className="text-xs leading-5">A troca aparece imediatamente. Salve para manter o tema na sua conta.</p></div>
       </AccordionSection>
 

@@ -2,6 +2,8 @@ export type BehaviorType = 'recorrente_semanal' | 'recorrente_mensal' | 'estoque
 export type MeasureUnit = 'un' | 'kg' | 'g' | 'L' | 'ml' | 'pct' | 'cx' | 'dz'
 export type UserSettingsDto = {
   theme: 'system' | 'light' | 'dark'
+  themePreset: import('./themes').ThemePresetId
+  favoriteThemes: [import('./themes').ThemePresetId, import('./themes').ThemePresetId]
   cameraFacingMode: 'environment' | 'user'
   notificationsEnabled: boolean
   monthlySummaryEnabled: boolean

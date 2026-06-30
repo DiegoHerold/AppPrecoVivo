@@ -177,7 +177,7 @@ export function ProductDetailScreen({
         </div>
       </section>
 
-      <section className="mt-5 overflow-hidden rounded-3xl bg-[linear-gradient(145deg,#312E81,#5B50E6)] p-5 text-white shadow-[0_12px_30px_rgba(67,56,202,.22)]">
+      <section className="accent-gradient mt-5 overflow-hidden rounded-3xl p-5 text-white shadow-[0_12px_30px_rgba(67,56,202,.22)]">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <span className="text-sm text-white/75">Estoque estimado atual</span>

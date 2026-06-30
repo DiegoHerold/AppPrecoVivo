@@ -112,6 +112,8 @@ model UserSettings {
   id                    String           @id @default(cuid())
   userId                String           @unique
   theme                 ThemePreference  @default(system)
+  themePreset           String           @default("claro_vivo")
+  favoriteThemes        String[]         @default(["claro_vivo", "escuro_aurora"])
   cameraFacingMode      CameraFacingMode @default(environment)
   notificationsEnabled  Boolean          @default(true)
   monthlySummaryEnabled Boolean          @default(true)

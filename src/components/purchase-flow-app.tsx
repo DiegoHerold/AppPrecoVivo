@@ -62,8 +62,8 @@ export function PurchaseFlowApp() {
   }, [])
 
   useEffect(() => {
-    applyThemePreference(user?.settings.theme ?? 'light')
-  }, [user?.settings.theme])
+    applyThemePreference(user?.settings.theme ?? 'light', user?.settings.themePreset)
+  }, [user?.settings.theme, user?.settings.themePreset])
 
   async function reloadAll() {
     if (!user) return

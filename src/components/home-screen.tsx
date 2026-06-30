@@ -142,7 +142,7 @@ export function HomeScreen({
         </div>
       </header>
 
-      <section className="overflow-hidden rounded-3xl bg-[radial-gradient(circle_at_100%_0,rgba(255,255,255,.22),transparent_28%),linear-gradient(145deg,#312E81,#5B50E6)] p-6 text-white shadow-[0_12px_32px_rgba(67,56,202,.24)]">
+      <section className="accent-gradient overflow-hidden rounded-3xl p-6 text-white shadow-[0_12px_32px_rgba(67,56,202,.24)]">
         <span className="text-sm text-white/75">Neste mês · compras registradas</span>
         <strong className="mt-3 block text-4xl font-black tracking-tight">{brl(data.currentMonth.totalSpent, 0)}</strong>
         <p className="mt-3 max-w-lg text-base leading-7 text-white/85">

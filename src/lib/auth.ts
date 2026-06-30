@@ -18,6 +18,8 @@ const publicUserSelect = {
   settings: {
     select: {
       theme: true,
+      themePreset: true,
+      favoriteThemes: true,
       cameraFacingMode: true,
       notificationsEnabled: true,
       monthlySummaryEnabled: true,
