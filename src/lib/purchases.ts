@@ -196,13 +196,16 @@ export async function createPurchaseFromText(userId: string, unknownInput: unkno
   }, { inputType: 'raw_text', inputValue: input.rawText, message: result.message })
 }
 
-export async function createPendingImport(userId: string, unknownInput: unknown) {
-  const input = pendingImportSchema.parse(unknownInput)
-  const findExisting = (accessKey: string) => prisma.purchase.findFirst({
+type PendingImportInput = ReturnType<typeof pendingImportSchema.parse>
+
+const findExistingImport = (userId: string, accessKey: string) => prisma.purchase.findFirst({
     where: { userId, accessKey, items: { some: {} } },
     select: { id: true, purchaseDate: true, importJobs: { select: { status: true, errorMessage: true } } },
   })
-  const duplicateResponse = (existing: NonNullable<Awaited<ReturnType<typeof findExisting>>>, itemCount = 0) => ({
+
+type ExistingImport = NonNullable<Awaited<ReturnType<typeof findExistingImport>>>
+
+const duplicateResponse = (existing: ExistingImport, itemCount = 0) => ({
     ...existing,
     imported: false,
     duplicate: true,
@@ -210,18 +213,55 @@ export async function createPendingImport(userId: string, unknownInput: unknown)
     message: 'Esta NFC-e já foi importada. Nenhum dado foi duplicado.',
     errorCode: 'already_imported' as const,
   })
+
+async function evaluatePendingImport(userId: string, input: PendingImportInput) {
   const directKey = accessKeyFrom(input.inputValue)
   if (directKey) {
-    const existing = await findExisting(directKey)
-    if (existing) return duplicateResponse(existing)
+    const existing = await findExistingImport(userId, directKey)
+    if (existing) return { existing, result: null }
   }
 
   const importer = importerFor(input.inputType as ImportInputType)
-  const importerInput = input.inputValue
-  const result = await importer.import(importerInput)
+  const result = await importer.import(input.inputValue)
   if (result.status === 'concluida' && result.items?.length && result.receipt) {
-    const existing = await findExisting(result.receipt.accessKey)
-    if (existing) return duplicateResponse(existing, result.items.length)
+    const existing = await findExistingImport(userId, result.receipt.accessKey)
+    if (existing) return { existing, result }
+  }
+  return { existing: null, result }
+}
+
+export async function previewPendingImport(userId: string, unknownInput: unknown) {
+  const input = pendingImportSchema.parse(unknownInput)
+  const { existing, result } = await evaluatePendingImport(userId, input)
+  if (existing) return { ...duplicateResponse(existing, result?.items?.length ?? 0), ready: false }
+  if (result?.status === 'concluida' && result.items?.length && result.receipt) {
+    return {
+      ready: true,
+      duplicate: false,
+      itemCount: result.items.length,
+      message: result.message,
+      receipt: result.receipt,
+      items: result.items.map((item) => ({ ...item, totalPrice: Math.round(item.quantity * item.unitPrice * 100) / 100 })),
+    }
+  }
+  return {
+    ready: false,
+    duplicate: false,
+    itemCount: 0,
+    message: result?.message ?? 'Não foi possível analisar esta nota.',
+    errorCode: result?.errorCode,
+    detectedAccessKey: result?.detectedAccessKey,
+  }
+}
+
+export async function createPendingImport(userId: string, unknownInput: unknown) {
+  const input = pendingImportSchema.parse(unknownInput)
+  const { existing, result } = await evaluatePendingImport(userId, input)
+  if (existing) return duplicateResponse(existing, result?.items?.length ?? 0)
+  if (!result) throw new Error('Não foi possível analisar esta nota.')
+
+  const importerInput = input.inputValue
+  if (result.status === 'concluida' && result.items?.length && result.receipt) {
 
     const { resolve } = await selectableGroups(userId)
     const items = result.items.map((item) => ({
@@ -249,7 +289,7 @@ export async function createPendingImport(userId: string, unknownInput: unknown)
       return { ...purchase, imported: true, duplicate: false, itemCount: result.items.length, message: result.message, accessKey: result.receipt.accessKey }
     } catch (error) {
       if (typeof error === 'object' && error && 'code' in error && error.code === 'P2002') {
-        const raced = await findExisting(result.receipt.accessKey)
+        const raced = await findExistingImport(userId, result.receipt.accessKey)
         if (raced) return duplicateResponse(raced, result.items.length)
       }
       throw error
@@ -276,6 +316,39 @@ export async function createPendingImport(userId: string, unknownInput: unknown)
     errorCode: result.errorCode,
     detectedAccessKey: result.detectedAccessKey,
   }
+}
+
+export async function deletePurchase(userId: string, purchaseId: string) {
+  const result = await prisma.$transaction(async (tx) => {
+    const purchase = await tx.purchase.findFirst({
+      where: { id: purchaseId, userId },
+      select: { purchaseDate: true, storeId: true, items: { select: { productId: true } } },
+    })
+    if (!purchase) throw new Error('Compra não encontrada.')
+
+    const productIds = [...new Set(purchase.items.map((item) => item.productId))]
+    await tx.purchase.delete({ where: { id: purchaseId } })
+
+    if (productIds.length) {
+      const orphanedProducts = await tx.product.findMany({
+        where: { id: { in: productIds }, userId, classificationConfirmed: false, items: { none: {} } },
+        select: { id: true },
+      })
+      if (orphanedProducts.length) {
+        await tx.product.deleteMany({ where: { id: { in: orphanedProducts.map((product) => product.id) } } })
+      }
+    }
+
+    if (purchase.storeId) {
+      const remainingPurchases = await tx.purchase.count({ where: { storeId: purchase.storeId } })
+      if (!remainingPurchases) await tx.store.delete({ where: { id: purchase.storeId } })
+    }
+    return { purchaseDate: purchase.purchaseDate }
+  }, { maxWait: 10_000, timeout: 20_000 })
+
+  await recalculatePurchaseMonth(userId, result.purchaseDate)
+  await syncInferenceEventsForUser(userId)
+  return { deleted: true }
 }
 
 export async function confirmReview(userId: string, itemId: string, input: {

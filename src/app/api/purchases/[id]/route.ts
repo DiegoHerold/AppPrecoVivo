@@ -1,6 +1,7 @@
 import { requireUser } from '@/lib/auth'
 import { errorResponse } from '@/lib/http'
 import { getPurchaseSummary } from '@/lib/queries'
+import { deletePurchase } from '@/lib/purchases'
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -12,3 +13,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 }
 
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const [user, route] = await Promise.all([requireUser(), params])
+    return Response.json(await deletePurchase(user.id, route.id))
+  } catch (error) {
+    return errorResponse(error)
+  }
+}

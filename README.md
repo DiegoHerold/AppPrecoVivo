@@ -41,6 +41,7 @@ O seed cria somente uma conta local de desenvolvimento e seu plano de categorias
 - Texto colado: aceita linhas no formato `produto | quantidade | unidade | preço unitário | categoria | comportamento`.
 - Chave, URL ou foto: a foto é lida no navegador, que envia somente o texto do QR Code para validação, consulta oficial e prevenção de duplicidade. Quando a leitura falha, permite tentar outra foto, digitar a chave ou cadastrar manualmente sem criar uma compra vazia.
 - O banco registra somente a URL/chave extraída. A imagem não é persistida nem na intranet nem na Vercel.
+- A nota é apresentada para revisão antes da gravação. O usuário pode cancelar a leitura, trocar a foto ou descartar a prévia; importações já concluídas também podem ser excluídas pelo resumo da compra.
 
 `/api/uploads` existe apenas como fallback de leitura para navegadores que não conseguirem decodificar a imagem. O cliente reduz a foto antes do envio; a API limita o payload, usa exclusivamente o diretório temporário do sistema (`/tmp` na Vercel) e apaga o arquivo no fim da mesma requisição. Uploads antigos continuam acessíveis somente em instalações locais, sem dependência de `storage` no fluxo atual.
 

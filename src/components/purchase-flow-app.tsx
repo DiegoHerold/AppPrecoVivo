@@ -106,6 +106,7 @@ export function PurchaseFlowApp() {
   }
 
   function purchaseCreated(id: string) { setSelectedPurchaseId(id); setScreen('processing'); setHistory((current) => [...current, 'processing']) }
+  async function purchaseDeleted() { setPurchase(null); setSelectedPurchaseId(null); await reloadAll(); setScreen('home'); setHistory(['home']) }
   async function reviewConfirmed() { await reloadAll() }
   function changeMonth(delta: number) { setFilteredFlow(null); setPeriod((current) => { const date = new Date(current.year, current.month - 1 + delta, 1); return { year: date.getFullYear(), month: date.getMonth() + 1 } }) }
   async function selectFlowCategory(categoryId: string | null) {
@@ -139,7 +140,7 @@ export function PurchaseFlowApp() {
       {screen === 'manual' && <ManualPurchaseScreen categories={selectableCategories} onBack={goBack} created={purchaseCreated} />}
       {screen === 'text' && <TextPurchaseScreen onBack={goBack} created={purchaseCreated} />}
       {screen === 'processing' && selectedPurchaseId && <ProcessingScreen purchaseId={selectedPurchaseId} done={showSummary} />}
-      {screen === 'summary' && <SummaryScreen purchase={purchase} onBack={goBack} navigate={navigate} />}
+      {screen === 'summary' && <SummaryScreen purchase={purchase} onBack={goBack} navigate={navigate} deleted={purchaseDeleted} />}
       {screen === 'reviews' && <ReviewsScreen reviews={reviews} categories={selectableCategories} onBack={goBack} confirmed={reviewConfirmed} />}
     </>}
   </div></div>{navVisible && <BottomNav screen={screen} navigate={navigate} />}</section></main>
