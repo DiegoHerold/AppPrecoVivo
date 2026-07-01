@@ -2,10 +2,11 @@
 
 import { useState } from 'react'
 import {
+  ArrowLeftRight,
   ArrowDownRight,
   ArrowUpRight,
   BarChart3,
-  ChevronLeft,
+  CalendarDays,
   ChevronRight,
   CircleAlert,
   Home,
@@ -20,6 +21,7 @@ import type { DashboardDto } from '@/lib/client-types'
 import { EmptyState, MetricCard, PageHeader } from './ui'
 
 type FlowView = 'summary' | 'categories' | 'prices' | 'stock'
+type MonthPeriod = { year: number; month: number }
 
 const views: { id: FlowView; label: string; icon: React.ReactNode }[] = [
   { id: 'summary', label: 'Resumo', icon: <BarChart3 size={17} /> },
@@ -29,6 +31,72 @@ const views: { id: FlowView; label: string; icon: React.ReactNode }[] = [
 ]
 
 const signedBrl = (value: number) => `${value > 0 ? '+' : ''}${brl(value, 0)}`
+
+function periodKey(period: MonthPeriod) {
+  return `${period.year}-${String(period.month).padStart(2, '0')}`
+}
+
+function shiftPeriod(period: MonthPeriod, delta: number): MonthPeriod {
+  const date = new Date(period.year, period.month - 1 + delta, 1)
+  return { year: date.getFullYear(), month: date.getMonth() + 1 }
+}
+
+function periodLabel(period: MonthPeriod) {
+  return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' })
+    .format(new Date(period.year, period.month - 1, 1))
+    .replace(/^./, (letter) => letter.toUpperCase())
+}
+
+function availablePeriods(selected: MonthPeriod, comparison: MonthPeriod) {
+  const now = new Date()
+  const periods = Array.from({ length: 24 }, (_value, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - index, 1)
+    return { year: date.getFullYear(), month: date.getMonth() + 1 }
+  })
+  for (const period of [selected, comparison]) {
+    if (!periods.some((item) => periodKey(item) === periodKey(period))) periods.push(period)
+  }
+  return periods.sort((left, right) => right.year - left.year || right.month - left.month)
+}
+
+function MonthComparisonControls({ data, selected, comparison, selectPeriod, selectComparison, swapPeriods }: {
+  data: DashboardDto
+  selected: MonthPeriod
+  comparison: MonthPeriod
+  selectPeriod: (period: MonthPeriod) => void
+  selectComparison: (period: MonthPeriod) => void
+  swapPeriods: () => void
+}) {
+  const options = availablePeriods(selected, comparison)
+  const selectedKey = periodKey(selected)
+  const comparisonKey = periodKey(comparison)
+  const now = new Date()
+  const current = { year: now.getFullYear(), month: now.getMonth() + 1 }
+  const next = shiftPeriod(selected, 1)
+  const nextDisabled = next.year > current.year || (next.year === current.year && next.month > current.month)
+  const parse = (value: string) => {
+    const [year, month] = value.split('-').map(Number)
+    return { year, month }
+  }
+
+  return <section className="mb-5 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-700"><CalendarDays size={20} /></span><div><h2 className="font-bold text-slate-950">Períodos da análise</h2><p className="mt-0.5 text-sm text-slate-600">Escolha os dois meses que deseja comparar.</p></div></div>
+      <button onClick={swapPeriods} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-700"><ArrowLeftRight size={17} /><span className="hidden sm:inline">Trocar</span></button>
+    </div>
+    <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
+      <label className="grid gap-1.5 text-sm font-bold text-slate-700">Mês analisado<select aria-label="Mês analisado" value={selectedKey} onChange={(event) => selectPeriod(parse(event.target.value))} className="min-h-12 rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-base font-bold text-indigo-950 outline-none focus:border-indigo-500">{options.map((option) => <option key={periodKey(option)} value={periodKey(option)} disabled={periodKey(option) === comparisonKey}>{periodLabel(option)}</option>)}</select></label>
+      <span className="pb-3 text-center text-sm font-bold text-slate-400">versus</span>
+      <label className="grid gap-1.5 text-sm font-bold text-slate-700">Comparar com<select aria-label="Comparar com" value={comparisonKey} onChange={(event) => selectComparison(parse(event.target.value))} className="min-h-12 rounded-xl border border-slate-200 bg-slate-50 px-3 text-base font-bold text-slate-900 outline-none focus:border-indigo-500">{options.map((option) => <option key={periodKey(option)} value={periodKey(option)} disabled={periodKey(option) === selectedKey}>{periodLabel(option)}</option>)}</select></label>
+    </div>
+    <div className="mt-3 flex flex-wrap gap-2">
+      <button onClick={() => selectPeriod(shiftPeriod(selected, -1))} className="min-h-9 rounded-full bg-slate-100 px-3 text-sm font-semibold text-slate-700">← Anterior</button>
+      <button onClick={() => selectPeriod(current)} disabled={selectedKey === periodKey(current)} className="min-h-9 rounded-full bg-indigo-50 px-3 text-sm font-semibold text-indigo-700 disabled:opacity-40">Mês atual</button>
+      <button onClick={() => selectPeriod(next)} disabled={nextDisabled} className="min-h-9 rounded-full bg-slate-100 px-3 text-sm font-semibold text-slate-700 disabled:opacity-40">Próximo →</button>
+    </div>
+    <p className="mt-3 text-sm leading-5 text-slate-500">{data.comparison.isPartial ? `Comparação proporcional: até o dia ${data.comparison.throughDay} nos dois meses.` : 'Comparação entre os meses completos selecionados.'}</p>
+  </section>
+}
 
 function Change({ value, percentage }: { value: number; percentage?: number | null }) {
   const positive = value > 0
@@ -93,7 +161,7 @@ function SummaryView({ data, color }: { data: DashboardDto; color: string }) {
     </section>
 
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <MetricCard label="Período anterior" value={brl(data.previousTotalSpent, 0)} detail={data.comparison.isPartial ? `até o dia ${data.comparison.referenceThroughDay}` : data.previousMonthLabel} />
+      <MetricCard label="Mês comparado" value={brl(data.previousTotalSpent, 0)} detail={data.comparison.isPartial ? `${data.previousMonthLabel} até o dia ${data.comparison.referenceThroughDay}` : data.previousMonthLabel} />
       <MetricCard label="Média mensal" value={brl(monthlyAverage, 0)} detail={`${completeMonths.length} meses completos`} tone="violet" />
       <MetricCard label="Parcela mensal" value={brl(data.estimatedConsumption, 0)} detail="amortização das compras" tone="cyan" />
       <MetricCard label="Compras registradas" value={String(data.purchaseCount)} detail="notas ou registros" tone="violet" />
@@ -158,22 +226,23 @@ function StockView({ data }: { data: DashboardDto }) {
   return <div><div className="mb-4 rounded-2xl bg-cyan-50 p-4 text-cyan-950"><div className="flex gap-3"><Info className="mt-0.5 shrink-0" size={21} /><div><h2 className="text-lg font-bold">Sinais de estoque</h2><p className="mt-1 text-sm leading-6 text-cyan-900/80">São inferências baseadas no histórico. Quanto mais regular o consumo, maior a confiança.</p></div></div></div>{stockSignals.length ? <div className="grid gap-3">{stockSignals.map((item) => <article key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex gap-3"><PackageSearch className="mt-0.5 shrink-0 text-cyan-700" size={22} /><div><strong className="text-base text-slate-950">{item.title}</strong><p className="mt-1 text-sm leading-6 text-slate-600">{item.description}</p>{item.confidence && <small className="mt-2 block text-sm font-semibold text-cyan-800">Confiança: {String(item.confidence).replaceAll('_', ' ')}</small>}</div></div></article>)}</div> : <EmptyState title="Nenhum sinal relevante no período" description="Isso não confirma que todo estoque está cheio; significa apenas que o histórico atual não gerou um alerta confiável nesta seleção." />}</div>
 }
 
-export function FlowScreen({ data, changeMonth, selectCategory, loading }: {
+export function FlowScreen({ data, analysisPeriod, comparisonPeriod, selectPeriod, selectComparison, swapPeriods, selectCategory, loading }: {
   data: DashboardDto
-  changeMonth: (delta: number) => void
+  analysisPeriod: MonthPeriod
+  comparisonPeriod: MonthPeriod
+  selectPeriod: (period: MonthPeriod) => void
+  selectComparison: (period: MonthPeriod) => void
+  swapPeriods: () => void
   selectCategory: (id: string | null) => void
   loading: boolean
 }) {
   const [view, setView] = useState<FlowView>('summary')
   const selected = data.classification.selected
   const color = selected?.color ?? '#635BFF'
-  const now = new Date()
-  const nextDisabled = data.year > now.getFullYear() || (data.year === now.getFullYear() && data.month >= now.getMonth() + 1)
-  const monthSelector = <div className="flex items-center rounded-xl bg-slate-100 p-1"><button aria-label="Mês anterior" onClick={() => changeMonth(-1)} className="grid h-10 w-10 place-items-center text-slate-500"><ChevronLeft size={18} /></button><span className="min-w-28 text-center text-sm font-bold text-slate-800">{data.monthLabel} {data.year}</span><button aria-label="Próximo mês" disabled={nextDisabled} onClick={() => changeMonth(1)} className="grid h-10 w-10 place-items-center text-slate-500 disabled:cursor-not-allowed disabled:opacity-30"><ChevronRight size={18} /></button></div>
 
   return <div className="relative px-4 pb-8 md:px-6">
-    <PageHeader title="Análise de fluxo" subtitle="Entenda o que mudou e onde agir" action={<div className="hidden min-[520px]:block">{monthSelector}</div>} />
-    <div className="flex justify-center border-b border-slate-100 py-3 min-[520px]:hidden">{monthSelector}</div>
+    <PageHeader title="Análise de fluxo" subtitle="Entenda o que mudou e onde agir" />
+    <MonthComparisonControls data={data} selected={analysisPeriod} comparison={comparisonPeriod} selectPeriod={selectPeriod} selectComparison={selectComparison} swapPeriods={swapPeriods} />
 
     <nav aria-label="Classificação do relatório" className="-mx-4 mb-3 flex gap-2 overflow-x-auto border-b border-slate-100 px-4 py-3 scrollbar-none md:-mx-6 md:px-6"><button onClick={() => selectCategory(null)} className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-semibold ${!selected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}><Home size={15} /> Tudo</button>{data.classification.breadcrumbs.map((item, index) => <button key={item.id} onClick={() => selectCategory(item.id)} className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-semibold ${index === data.classification.breadcrumbs.length - 1 ? 'text-white' : 'bg-slate-100 text-slate-600'}`} style={index === data.classification.breadcrumbs.length - 1 ? { background: item.color } : undefined}><span>{item.icon}</span>{item.name}</button>)}</nav>
 

@@ -66,8 +66,8 @@ export type DashboardDto = {
   difference: number; estimatedConsumption: number; stockAmount: number; recurringAmount: number; punctualAmount: number
   priceIncreaseAmount: number; quantityIncreaseAmount: number; purchaseCount: number; categories: CategoryDto[]
   comparison: {
-    kind: 'same_days_previous_month' | 'full_previous_month'; isPartial: boolean; throughDay: number
-    referenceThroughDay: number; label: string; differencePercentage: number | null
+    kind: 'same_days_reference_month' | 'full_reference_month'; isPartial: boolean; throughDay: number
+    referenceThroughDay: number; referenceYear: number; referenceMonth: number; label: string; differencePercentage: number | null
   }
   variation: {
     components: { type: 'price' | 'quantity' | 'new_products' | 'removed_products' | 'mix'; label: string; description: string; amount: number }[]

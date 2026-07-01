@@ -74,8 +74,9 @@ export async function getClassificationDashboard(
   month: number,
   categoryId?: string | null,
   asOf: Date = new Date(),
+  reference?: { year: number; month: number },
 ) {
-  const comparisonWindow = flowComparisonWindow(year, month, asOf)
+  const comparisonWindow = flowComparisonWindow(year, month, asOf, reference)
   const historyDates = Array.from(
     { length: 12 },
     (_value, index) => new Date(Date.UTC(year, month - 12 + index, 1)),
@@ -83,7 +84,10 @@ export async function getClassificationDashboard(
   const rangeStart = historyDates[0] < comparisonWindow.referenceStart
     ? historyDates[0]
     : comparisonWindow.referenceStart
-  const rangeEnd = new Date(Date.UTC(year, month, 1))
+  const selectedNaturalEnd = new Date(Date.UTC(year, month, 1))
+  const rangeEnd = comparisonWindow.referenceEnd > selectedNaturalEnd
+    ? comparisonWindow.referenceEnd
+    : selectedNaturalEnd
 
   // GET permanece leitura pura: os snapshots persistidos são atualizados nas
   // mutações de compra/produto, enquanto este relatório deriva sua resposta
@@ -275,6 +279,8 @@ export async function getClassificationDashboard(
       isPartial: comparisonWindow.isPartial,
       throughDay: comparisonWindow.throughDay,
       referenceThroughDay: comparisonWindow.referenceThroughDay,
+      referenceYear: comparisonWindow.referenceStart.getUTCFullYear(),
+      referenceMonth: comparisonWindow.referenceStart.getUTCMonth() + 1,
       label: comparisonWindow.isPartial
         ? `Até o dia ${comparisonWindow.throughDay} versus os mesmos dias de ${previousMonthLabel}`
         : `${monthName(year, month)} versus ${previousMonthLabel}`,

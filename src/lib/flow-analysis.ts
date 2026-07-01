@@ -229,27 +229,37 @@ export function itemsInRange(items: FlowItem[], start: Date, end: Date) {
   return items.filter((item) => Boolean(item.purchaseDate && item.purchaseDate >= start && item.purchaseDate < end))
 }
 
-export function flowComparisonWindow(year: number, month: number, asOf: Date) {
+export function flowComparisonWindow(
+  year: number,
+  month: number,
+  asOf: Date,
+  reference?: { year: number; month: number },
+) {
   const selectedStart = new Date(Date.UTC(year, month - 1, 1))
   const selectedNaturalEnd = new Date(Date.UTC(year, month, 1))
-  const previousStart = new Date(Date.UTC(year, month - 2, 1))
-  const previousNaturalEnd = selectedStart
-  const currentMonth = asOf.getUTCFullYear() === year && asOf.getUTCMonth() + 1 === month
+  const defaultReference = new Date(Date.UTC(year, month - 2, 1))
+  const referenceStart = reference
+    ? new Date(Date.UTC(reference.year, reference.month - 1, 1))
+    : defaultReference
+  const referenceNaturalEnd = new Date(Date.UTC(referenceStart.getUTCFullYear(), referenceStart.getUTCMonth() + 1, 1))
+  const selectedIsCurrent = asOf.getUTCFullYear() === year && asOf.getUTCMonth() + 1 === month
+  const referenceIsCurrent = asOf.getUTCFullYear() === referenceStart.getUTCFullYear() && asOf.getUTCMonth() === referenceStart.getUTCMonth()
+  const compareThroughSameDay = selectedIsCurrent || referenceIsCurrent
   const selectedDays = new Date(Date.UTC(year, month, 0)).getUTCDate()
-  const previousDays = new Date(Date.UTC(previousStart.getUTCFullYear(), previousStart.getUTCMonth() + 1, 0)).getUTCDate()
-  const throughDay = currentMonth ? Math.min(asOf.getUTCDate(), selectedDays) : selectedDays
-  const referenceThroughDay = currentMonth ? Math.min(throughDay, previousDays) : previousDays
+  const referenceDays = new Date(Date.UTC(referenceStart.getUTCFullYear(), referenceStart.getUTCMonth() + 1, 0)).getUTCDate()
+  const throughDay = compareThroughSameDay ? Math.min(asOf.getUTCDate(), selectedDays, referenceDays) : selectedDays
+  const referenceThroughDay = compareThroughSameDay ? throughDay : referenceDays
 
   return {
     selectedStart,
-    selectedEnd: currentMonth ? new Date(Date.UTC(year, month - 1, throughDay + 1)) : selectedNaturalEnd,
-    referenceStart: previousStart,
-    referenceEnd: currentMonth
-      ? new Date(Date.UTC(previousStart.getUTCFullYear(), previousStart.getUTCMonth(), referenceThroughDay + 1))
-      : previousNaturalEnd,
-    isPartial: currentMonth && throughDay < selectedDays,
+    selectedEnd: compareThroughSameDay ? new Date(Date.UTC(year, month - 1, throughDay + 1)) : selectedNaturalEnd,
+    referenceStart,
+    referenceEnd: compareThroughSameDay
+      ? new Date(Date.UTC(referenceStart.getUTCFullYear(), referenceStart.getUTCMonth(), referenceThroughDay + 1))
+      : referenceNaturalEnd,
+    isPartial: compareThroughSameDay && (throughDay < selectedDays || referenceThroughDay < referenceDays),
     throughDay,
     referenceThroughDay,
-    comparisonKind: currentMonth ? 'same_days_previous_month' as const : 'full_previous_month' as const,
+    comparisonKind: compareThroughSameDay ? 'same_days_reference_month' as const : 'full_reference_month' as const,
   }
 }

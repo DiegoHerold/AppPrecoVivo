@@ -21,8 +21,26 @@ import { ProfileScreen } from './profile-screen'
 
 const withoutBottomNav = new Set<AppScreen>(['add', 'manual', 'text', 'processing'])
 
-async function fetchAppData(period: { year: number; month: number }) {
-  const query = `?year=${period.year}&month=${period.month}`
+type MonthPeriod = { year: number; month: number }
+
+function shiftPeriod(period: MonthPeriod, delta: number): MonthPeriod {
+  const date = new Date(period.year, period.month - 1 + delta, 1)
+  return { year: date.getFullYear(), month: date.getMonth() + 1 }
+}
+
+function dashboardQuery(period: MonthPeriod, comparison: MonthPeriod, categoryId?: string | null) {
+  const params = new URLSearchParams({
+    year: String(period.year),
+    month: String(period.month),
+    compareYear: String(comparison.year),
+    compareMonth: String(comparison.month),
+  })
+  if (categoryId) params.set('categoryId', categoryId)
+  return `?${params.toString()}`
+}
+
+async function fetchAppData(period: MonthPeriod, comparison: MonthPeriod) {
+  const query = dashboardQuery(period, comparison)
   const [dashboard, inference, accountPlan, products, reviews] = await Promise.all([
     clientApi<DashboardDto>(`/api/dashboard${query}`),
     clientApi<InferenceDashboardDto>('/api/inference'),
@@ -40,6 +58,7 @@ export function PurchaseFlowApp() {
   const [screen, setScreen] = useState<AppScreen>('home')
   const [, setHistory] = useState<AppScreen[]>(['home'])
   const [period, setPeriod] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 })
+  const [comparisonPeriod, setComparisonPeriod] = useState(() => shiftPeriod({ year: now.getFullYear(), month: now.getMonth() + 1 }, -1))
   const [dashboard, setDashboard] = useState<DashboardDto | null>(null)
   const [inference, setInference] = useState<InferenceDashboardDto | null>(null)
   const [categories, setCategories] = useState<CategoryDto[]>([])
@@ -70,7 +89,7 @@ export function PurchaseFlowApp() {
     setLoading(true)
     setError('')
     try {
-      const data = await fetchAppData(period)
+      const data = await fetchAppData(period, comparisonPeriod)
       setDashboard(data.dashboard); setInference(data.inference); setCategories(data.categories); setAccountPlan(data.accountPlan); setProducts(data.products); setReviews(data.reviews)
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Não foi possível carregar os dados.') } finally { setLoading(false) }
   }
@@ -78,12 +97,12 @@ export function PurchaseFlowApp() {
   useEffect(() => {
     if (!user) return
     let active = true
-    fetchAppData(period).then((data) => {
+    fetchAppData(period, comparisonPeriod).then((data) => {
       if (!active) return
       setDashboard(data.dashboard); setInference(data.inference); setCategories(data.categories); setAccountPlan(data.accountPlan); setProducts(data.products); setReviews(data.reviews); setError('')
-    }).catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : 'Não foi possível carregar os dados.') }).finally(() => { if (active) setLoading(false) })
+    }).catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : 'Não foi possível carregar os dados.') }).finally(() => { if (active) { setLoading(false); setFlowLoading(false) } })
     return () => { active = false }
-  }, [user, period])
+  }, [user, period, comparisonPeriod])
 
   function navigate(next: AppScreen) { if (next === 'flow') setFilteredFlow(null); setScreen(next); setHistory((current) => [...current, next]) }
   function goBack() { setHistory((current) => { if (current.length <= 1) { setScreen('home'); return ['home'] } const next = current.slice(0, -1); setScreen(next[next.length - 1]); return next }) }
@@ -110,12 +129,31 @@ export function PurchaseFlowApp() {
   function purchaseCreated(id: string) { setSelectedPurchaseId(id); setScreen('processing'); setHistory((current) => [...current, 'processing']) }
   async function purchaseDeleted() { setPurchase(null); setSelectedPurchaseId(null); await reloadAll(); setScreen('home'); setHistory(['home']) }
   async function reviewConfirmed() { await reloadAll() }
-  function changeMonth(delta: number) { setFilteredFlow(null); setPeriod((current) => { const date = new Date(current.year, current.month - 1 + delta, 1); return { year: date.getFullYear(), month: date.getMonth() + 1 } }) }
+  function selectFlowPeriod(next: MonthPeriod) {
+    setFilteredFlow(null)
+    setFlowLoading(true)
+    setPeriod(next)
+    if (next.year === comparisonPeriod.year && next.month === comparisonPeriod.month) {
+      setComparisonPeriod(shiftPeriod(next, -1))
+    }
+  }
+  function selectFlowComparison(next: MonthPeriod) {
+    if (next.year === period.year && next.month === period.month) return
+    setFilteredFlow(null)
+    setFlowLoading(true)
+    setComparisonPeriod(next)
+  }
+  function swapFlowPeriods() {
+    setFilteredFlow(null)
+    setFlowLoading(true)
+    setPeriod(comparisonPeriod)
+    setComparisonPeriod(period)
+  }
   async function selectFlowCategory(categoryId: string | null) {
     if (!categoryId) { setFilteredFlow(null); return }
     setFlowLoading(true)
     try {
-      const query = '?year=' + period.year + '&month=' + period.month + '&categoryId=' + encodeURIComponent(categoryId)
+      const query = dashboardQuery(period, comparisonPeriod, categoryId)
       setFilteredFlow(await clientApi<DashboardDto>('/api/dashboard' + query))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Não foi possível abrir essa classificação.')
@@ -134,7 +172,7 @@ export function PurchaseFlowApp() {
     {loading && !dashboard ? <LoadingState /> : error && !dashboard ? <ErrorState message={error} retry={() => void reloadAll()} /> : <>
       {screen === 'home' && inference && <HomeScreen user={user} data={inference} reviewCount={reviews.length} navigate={navigate} openProduct={(id) => void openProduct(id)} />}
       {screen === 'profile' && <ProfileScreen user={user} onBack={goBack} updated={setUser} logout={() => void logout()} />}
-      {screen === 'flow' && dashboard && <FlowScreen data={filteredFlow ?? dashboard} changeMonth={changeMonth} selectCategory={(id) => void selectFlowCategory(id)} loading={flowLoading} />}
+      {screen === 'flow' && dashboard && <FlowScreen data={filteredFlow ?? dashboard} analysisPeriod={period} comparisonPeriod={comparisonPeriod} selectPeriod={selectFlowPeriod} selectComparison={selectFlowComparison} swapPeriods={swapFlowPeriods} selectCategory={(id) => void selectFlowCategory(id)} loading={flowLoading} />}
       {screen === 'products' && <ProductsScreen products={products} openProduct={(id) => void openProduct(id)} openCategories={() => navigate('categories')} />}
       {screen === 'categories' && <PlanoContasScreen nodes={accountPlan} onBack={goBack} changed={reloadAll} openProduct={(id) => void openProduct(id)} />}
       {screen === 'product' && (product && productInference ? <ProductDetailScreen product={product} inference={productInference} categories={selectableCategories} onBack={goBack} updated={async (next) => { setProduct(next); setProductInference(await clientApi<ProductInferenceDto>(`/api/inference?productId=${encodeURIComponent(next.id)}`)); await reloadAll() }} removed={async () => { setProduct(null); setProductInference(null); await reloadAll(); goBack() }} /> : <LoadingState label="Carregando histórico e estimativas…" />)}

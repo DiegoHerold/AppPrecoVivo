@@ -26,3 +26,16 @@ export function readMonth(request: Request) {
   }
   return { year, month }
 }
+
+export function readOptionalMonth(request: Request, yearParam: string, monthParam: string) {
+  const url = new URL(request.url)
+  const rawYear = url.searchParams.get(yearParam)
+  const rawMonth = url.searchParams.get(monthParam)
+  if (rawYear === null && rawMonth === null) return undefined
+  const year = Number(rawYear)
+  const month = Number(rawMonth)
+  if (!Number.isInteger(year) || year < 2000 || year > 2200 || !Number.isInteger(month) || month < 1 || month > 12) {
+    throw new Error('Mês de comparação inválido.')
+  }
+  return { year, month }
+}

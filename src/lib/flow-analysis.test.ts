@@ -62,6 +62,30 @@ test('mês corrente compara somente os mesmos dias do mês anterior', () => {
   assert.equal(window.referenceEnd.toISOString(), '2026-06-11T00:00:00.000Z')
 })
 
+test('comparação aceita um mês de referência escolhido pelo usuário', () => {
+  const window = flowComparisonWindow(
+    2026,
+    7,
+    new Date('2026-07-10T15:00:00Z'),
+    { year: 2026, month: 2 },
+  )
+  assert.equal(window.referenceStart.toISOString(), '2026-02-01T00:00:00.000Z')
+  assert.equal(window.referenceEnd.toISOString(), '2026-02-11T00:00:00.000Z')
+  assert.equal(window.comparisonKind, 'same_days_reference_month')
+})
+
+test('comparação continua proporcional quando o mês corrente é a referência', () => {
+  const window = flowComparisonWindow(
+    2026,
+    6,
+    new Date('2026-07-10T15:00:00Z'),
+    { year: 2026, month: 7 },
+  )
+  assert.equal(window.selectedEnd.toISOString(), '2026-06-11T00:00:00.000Z')
+  assert.equal(window.referenceEnd.toISOString(), '2026-07-11T00:00:00.000Z')
+  assert.equal(window.isPartial, true)
+})
+
 test('escopo mantém somente o nó escolhido e seus descendentes informados', () => {
   const items = [
     item({ key: 'arroz', name: 'Arroz', totalPrice: 20, nodeId: 'arroz' }),
