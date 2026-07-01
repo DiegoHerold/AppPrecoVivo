@@ -10,6 +10,9 @@ export type FlowItem = {
   totalPrice: number
   behaviorType: BehaviorType
   estimatedDurationMonths: number
+  purchaseDate?: Date
+  comparableQuantity?: number | null
+  comparableUnit?: string | null
   // nodeId é o nó PRODUTO do plano de contas ao qual o item pertence.
   // groupId é o grupo (parentId) desse nó — derivado da árvore, fonte única de classificação.
   nodeId?: string

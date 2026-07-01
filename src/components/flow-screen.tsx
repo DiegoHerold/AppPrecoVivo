@@ -1,9 +1,130 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, Home, Info, Package } from 'lucide-react'
+import { useState } from 'react'
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  BarChart3,
+  ChevronLeft,
+  ChevronRight,
+  CircleAlert,
+  Home,
+  Info,
+  Layers3,
+  Package,
+  PackageSearch,
+  Tags,
+} from 'lucide-react'
 import { brl } from '@/lib/client-api'
 import type { DashboardDto } from '@/lib/client-types'
-import { MetricCard, PageHeader } from './ui'
+import { EmptyState, MetricCard, PageHeader } from './ui'
+
+type FlowView = 'summary' | 'categories' | 'prices' | 'stock'
+
+const views: { id: FlowView; label: string; icon: React.ReactNode }[] = [
+  { id: 'summary', label: 'Resumo', icon: <BarChart3 size={17} /> },
+  { id: 'categories', label: 'Categorias', icon: <Layers3 size={17} /> },
+  { id: 'prices', label: 'Preços', icon: <Tags size={17} /> },
+  { id: 'stock', label: 'Estoque', icon: <PackageSearch size={17} /> },
+]
+
+const signedBrl = (value: number) => `${value > 0 ? '+' : ''}${brl(value, 0)}`
+
+function Change({ value, percentage }: { value: number; percentage?: number | null }) {
+  const positive = value > 0
+  const neutral = Math.abs(value) < 0.01
+  return <span className={`inline-flex items-center gap-1 text-sm font-bold ${neutral ? 'text-slate-500' : positive ? 'text-rose-700' : 'text-emerald-700'}`}>
+    {neutral ? null : positive ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+    {signedBrl(value)}{percentage === null || percentage === undefined ? '' : ` · ${percentage > 0 ? '+' : ''}${percentage}%`}
+  </span>
+}
+
+function HistoryChart({ data, color }: { data: DashboardDto; color: string }) {
+  const maximum = Math.max(
+    1,
+    ...data.history.map((item) => item.totalSpent),
+    ...data.history.map((item) => item.estimatedConsumption),
+  )
+  return <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div><h2 className="text-lg font-bold text-slate-950">Evolução do fluxo</h2><p className="mt-1 text-sm leading-6 text-slate-600">Desembolso real e parcela mensal das compras registradas.</p></div>
+      <div className="flex flex-wrap gap-3 text-sm text-slate-600"><span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded" style={{ background: color }} />Desembolso</span><span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded bg-cyan-400" />Parcela mensal</span></div>
+    </div>
+    <div className="mt-6 grid h-52 grid-cols-6 items-end gap-2" aria-label="Evolução de desembolso e parcela mensal">
+      {data.history.map((item) => <div key={`${item.year}-${item.month}`} className="flex h-full min-w-0 flex-col items-center justify-end gap-2">
+        <div className="flex h-36 w-full items-end justify-center gap-1">
+          <span className={`w-[38%] min-w-2 rounded-t-md ${item.partial ? 'opacity-60' : ''}`} style={{ height: `${Math.max(item.totalSpent ? 4 : 1, item.totalSpent / maximum * 100)}%`, background: color }} title={`Desembolso: ${brl(item.totalSpent)}`} />
+          <span className={`w-[38%] min-w-2 rounded-t-md bg-cyan-400 ${item.partial ? 'opacity-60' : ''}`} style={{ height: `${Math.max(item.estimatedConsumption ? 4 : 1, item.estimatedConsumption / maximum * 100)}%` }} title={`Parcela mensal: ${brl(item.estimatedConsumption)}`} />
+        </div>
+        <small className="truncate text-sm font-medium capitalize text-slate-600">{item.label}{item.partial ? '*' : ''}</small>
+      </div>)}
+    </div>
+    {data.comparison.isPartial && <p className="mt-3 text-sm text-slate-500">* Mês em andamento, contabilizado até o dia {data.comparison.throughDay}.</p>}
+  </section>
+}
+
+function ProductImpactList({ data, limit }: { data: DashboardDto; limit?: number }) {
+  const products = limit ? data.productImpacts.slice(0, limit) : data.productImpacts
+  if (!products.length) return <EmptyState title="Ainda não há comparação disponível" description="Registre compras em dois períodos para identificar quais produtos mudaram o seu desembolso." />
+  return <div className="grid gap-3">{products.map((product) => <article key={product.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-700"><Package size={20} /></span><span className="min-w-0 flex-1"><strong className="block text-base text-slate-950">{product.name}</strong><small className="mt-1 block text-sm text-slate-600">{product.status === 'new' ? 'Novo no período' : product.status === 'removed' ? 'Não se repetiu' : product.status === 'unit_incompatible' ? 'Unidade não comparável' : product.status === 'out_of_pattern' ? 'Fora do padrão' : 'Comprado nos dois períodos'}</small></span><Change value={product.variation} percentage={product.variationPercentage} /></div>
+    {product.unitComparable && product.currentUnitPrice !== null && product.referenceUnitPrice !== null && <div className="mt-3 grid grid-cols-2 gap-2 text-sm"><span className="rounded-xl bg-indigo-50 p-3 text-indigo-800">Preço atual <b className="mt-1 block text-indigo-950">{brl(product.currentUnitPrice)}/{product.unit}</b></span><span className="rounded-xl bg-slate-50 p-3 text-slate-600">Referência <b className="mt-1 block text-slate-900">{brl(product.referenceUnitPrice)}/{product.unit}</b></span></div>}
+    {(product.priceEffect !== 0 || product.quantityEffect !== 0) && <div className="mt-3 grid grid-cols-2 gap-2 text-sm"><span className="rounded-xl bg-slate-50 p-3 text-slate-600">Preço <b className="mt-1 block text-slate-900">{signedBrl(product.priceEffect)}</b></span><span className="rounded-xl bg-slate-50 p-3 text-slate-600">Quantidade <b className="mt-1 block text-slate-900">{signedBrl(product.quantityEffect)}</b></span></div>}
+  </article>)}</div>
+}
+
+function SummaryView({ data, color }: { data: DashboardDto; color: string }) {
+  return <div className="grid gap-5">
+    <section className="overflow-hidden rounded-3xl p-6 text-white shadow-lg" style={{ background: `linear-gradient(135deg, ${color}, #312e81)` }}>
+      <p className="text-sm font-medium text-white/75">{data.comparison.isPartial ? `Desembolso até o dia ${data.comparison.throughDay}` : 'Desembolso no período'}</p>
+      <strong className="mt-2 block text-4xl font-black tracking-tight">{brl(data.totalSpent, 0)}</strong>
+      <div className="mt-3 inline-flex rounded-full bg-white/15 px-3 py-2 text-sm font-bold text-white"><span>{signedBrl(data.difference)}{data.comparison.differencePercentage === null ? '' : ` · ${data.comparison.differencePercentage > 0 ? '+' : ''}${data.comparison.differencePercentage}%`}</span></div>
+      <p className="mt-4 max-w-xl text-sm leading-6 text-white/85">{data.comparison.label}. {data.variation.principalMessage}</p>
+    </section>
+
+    <div className="grid grid-cols-2 gap-3 min-[460px]:grid-cols-3 [&>*:last-child]:col-span-2 min-[460px]:[&>*:last-child]:col-span-1">
+      <MetricCard label="Período anterior" value={brl(data.previousTotalSpent, 0)} detail={data.comparison.isPartial ? `até o dia ${data.comparison.referenceThroughDay}` : data.previousMonthLabel} />
+      <MetricCard label="Parcela mensal" value={brl(data.estimatedConsumption, 0)} detail="amortização das compras" tone="cyan" />
+      <MetricCard label="Compras registradas" value={String(data.purchaseCount)} detail="notas ou registros" tone="violet" />
+    </div>
+
+    <HistoryChart data={data} color={color} />
+
+    <section><div className="mb-3"><h2 className="text-xl font-bold text-slate-950">Por que meu gasto mudou?</h2><p className="mt-1 text-sm leading-6 text-slate-600">Cada valor entra uma única vez e a soma fecha com a variação de {signedBrl(data.difference)}.</p></div>
+      <div className="grid gap-3 sm:grid-cols-2">{data.variation.components.filter((component) => Math.abs(component.amount) > 0.009).map((component) => <article key={component.type} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><strong className="text-base text-slate-900">{component.label}</strong><Change value={component.amount} /></div><p className="mt-2 text-sm leading-6 text-slate-600">{component.description}</p></article>)}</div>
+      {!data.variation.components.some((component) => Math.abs(component.amount) > 0.009) && <EmptyState title="Fluxo estável" description="Não houve mudança relevante no período comparável." />}
+    </section>
+
+    <section><div className="mb-3"><h2 className="text-xl font-bold text-slate-950">Produtos que mais impactaram</h2><p className="mt-1 text-sm text-slate-600">Ordenados pela maior mudança em reais.</p></div><ProductImpactList data={data} limit={5} /></section>
+
+    {data.attention.length > 0 && <section><div className="mb-3"><h2 className="text-xl font-bold text-slate-950">Merece atenção</h2><p className="mt-1 text-sm text-slate-600">Sinais priorizados por impacto, nunca tratados como certeza.</p></div><div className="grid gap-3">{data.attention.slice(0, 5).map((item) => <article key={item.id} className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4"><CircleAlert className="mt-0.5 shrink-0 text-amber-700" size={21} /><div><strong className="text-base text-amber-950">{item.title}</strong><p className="mt-1 text-sm leading-6 text-amber-900/80">{item.description}</p>{item.confidence && <small className="mt-2 block text-sm font-semibold text-amber-800">Confiança: {String(item.confidence).replaceAll('_', ' ')}</small>}</div></article>)}</div></section>}
+  </div>
+}
+
+function CategoriesView({ data, selectCategory, color }: { data: DashboardDto; selectCategory: (id: string | null) => void; color: string }) {
+  const title = data.classification.selected?.name ?? 'Tudo'
+  const composition = data.classification.children
+  const products = data.classification.products
+  const directShare = data.totalSpent ? data.classification.directTotalSpent / data.totalSpent * 100 : 0
+  return <div>
+    <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4"><h2 className="text-lg font-bold text-slate-950">Composição de {title}</h2><p className="mt-1 text-sm leading-6 text-slate-600">Navegue pela árvore e veja participação e contribuição para a mudança.</p>{data.totalSpent > 0 && <div className="mt-4 flex h-3 overflow-hidden rounded-full bg-slate-100">{composition.map((category) => <span key={category.id} style={{ width: `${category.shareOfTotal}%`, background: category.color }} />)}{directShare > 0 && <span style={{ width: `${directShare}%`, background: color }} />}</div>}</div>
+
+    {data.totalSpent === 0 && data.previousTotalSpent === 0 && <EmptyState title="Ainda não há composição para comparar" description="Registre uma compra neste nível. Depois, as categorias mostrarão participação, variação e contribuição para a mudança." />}
+
+    {(data.totalSpent !== 0 || data.previousTotalSpent !== 0) && (composition.length ? <div className="grid gap-3">{composition.map((category) => <button key={category.id} onClick={() => selectCategory(category.id)} className="flex min-h-24 items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-xl" style={{ background: `${category.color}15` }}>{category.icon}</span><span className="min-w-0 flex-1"><strong className="block truncate text-base text-slate-950">{category.name}</strong><small className="mt-1 block text-sm text-slate-600">{category.shareOfTotal}% do período · {category.productCount} {category.productCount === 1 ? 'produto' : 'produtos'}</small><span className="mt-1 block"><Change value={category.variation} percentage={category.variationPercentage} /></span></span><span className="text-right"><b className="block text-base text-slate-900">{brl(category.totalSpent)}</b><ChevronRight className="ml-auto mt-2 text-slate-400" size={19} /></span></button>)}</div> : !products.length ? <EmptyState title="Nenhum item nesta classificação" description="Quando uma compra for classificada aqui, sua participação e variação aparecerão nesta visão." /> : null)}
+
+    {products.length > 0 && <section className="mt-6"><h2 className="mb-3 text-lg font-bold text-slate-950">Produtos diretamente em {title}</h2><div className="grid gap-3">{products.map((product) => <article key={product.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl" style={{ background: `${color}15`, color }}><Package size={19} /></span><span className="min-w-0 flex-1"><strong className="block truncate text-base text-slate-950">{product.name}</strong><small className="mt-1 block text-sm text-slate-600">{brl(product.averageUnitPrice)}/{product.unit} · {product.purchaseCount} {product.purchaseCount === 1 ? 'compra' : 'compras'}</small></span><span className="text-right"><b className="block text-base">{brl(product.amount)}</b><Change value={product.variation} percentage={product.variationPercentage} /></span></article>)}</div></section>}
+  </div>
+}
+
+function PricesView({ data }: { data: DashboardDto }) {
+  return <div><div className="mb-4"><h2 className="text-xl font-bold text-slate-950">Impacto de preços e quantidades</h2><p className="mt-1 text-sm leading-6 text-slate-600">Preços são normalizados somente quando massa, volume ou contagem são compatíveis.</p></div><ProductImpactList data={data} /></div>
+}
+
+function StockView({ data }: { data: DashboardDto }) {
+  const stockSignals = data.attention.filter((item) => item.type !== 'price_increase')
+  return <div><div className="mb-4 rounded-2xl bg-cyan-50 p-4 text-cyan-950"><div className="flex gap-3"><Info className="mt-0.5 shrink-0" size={21} /><div><h2 className="text-lg font-bold">Sinais de estoque</h2><p className="mt-1 text-sm leading-6 text-cyan-900/80">São inferências baseadas no histórico. Quanto mais regular o consumo, maior a confiança.</p></div></div></div>{stockSignals.length ? <div className="grid gap-3">{stockSignals.map((item) => <article key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex gap-3"><PackageSearch className="mt-0.5 shrink-0 text-cyan-700" size={22} /><div><strong className="text-base text-slate-950">{item.title}</strong><p className="mt-1 text-sm leading-6 text-slate-600">{item.description}</p>{item.confidence && <small className="mt-2 block text-sm font-semibold text-cyan-800">Confiança: {String(item.confidence).replaceAll('_', ' ')}</small>}</div></div></article>)}</div> : <EmptyState title="Nenhum sinal relevante no período" description="Isso não confirma que todo estoque está cheio; significa apenas que o histórico atual não gerou um alerta confiável nesta seleção." />}</div>
+}
 
 export function FlowScreen({ data, changeMonth, selectCategory, loading }: {
   data: DashboardDto
@@ -11,31 +132,26 @@ export function FlowScreen({ data, changeMonth, selectCategory, loading }: {
   selectCategory: (id: string | null) => void
   loading: boolean
 }) {
-  const max = Math.max(1, ...data.history.map((item) => item.totalSpent))
+  const [view, setView] = useState<FlowView>('summary')
   const selected = data.classification.selected
   const color = selected?.color ?? '#635BFF'
-  const title = selected?.name ?? 'Tudo'
-  const composition = data.classification.children
-  const products = data.classification.products
+  const now = new Date()
+  const nextDisabled = data.year > now.getFullYear() || (data.year === now.getFullYear() && data.month >= now.getMonth() + 1)
+  const monthSelector = <div className="flex items-center rounded-xl bg-slate-100 p-1"><button aria-label="Mês anterior" onClick={() => changeMonth(-1)} className="grid h-10 w-10 place-items-center text-slate-500"><ChevronLeft size={18} /></button><span className="min-w-28 text-center text-sm font-bold text-slate-800">{data.monthLabel} {data.year}</span><button aria-label="Próximo mês" disabled={nextDisabled} onClick={() => changeMonth(1)} className="grid h-10 w-10 place-items-center text-slate-500 disabled:cursor-not-allowed disabled:opacity-30"><ChevronRight size={18} /></button></div>
 
   return <div className="relative px-4 pb-8 md:px-6">
-    <PageHeader title="Análise de fluxo" subtitle="Navegue pelo seu plano de contas" action={<div className="flex items-center rounded-lg bg-slate-100 p-1"><button aria-label="Mês anterior" onClick={() => changeMonth(-1)} className="p-1 text-slate-400"><ChevronLeft size={14} /></button><span className="min-w-20 text-center text-[9px] font-bold">{data.monthLabel} {data.year}</span><button aria-label="Próximo mês" onClick={() => changeMonth(1)} className="p-1 text-slate-400"><ChevronRight size={14} /></button></div>} />
+    <PageHeader title="Análise de fluxo" subtitle="Entenda o que mudou e onde agir" action={<div className="hidden min-[520px]:block">{monthSelector}</div>} />
+    <div className="flex justify-center border-b border-slate-100 py-3 min-[520px]:hidden">{monthSelector}</div>
 
-    <nav aria-label="Classificação do relatório" className="-mx-4 mb-4 flex gap-2 overflow-x-auto border-b border-slate-100 px-4 py-3 scrollbar-none md:-mx-6 md:px-6">
-      <button onClick={() => selectCategory(null)} className={'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[8px] font-semibold ' + (!selected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500')}><Home size={10} /> Tudo</button>
-      {data.classification.breadcrumbs.map((item, index) => <button key={item.id} onClick={() => selectCategory(item.id)} className={'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[8px] font-semibold ' + (index === data.classification.breadcrumbs.length - 1 ? 'text-white' : 'bg-slate-100 text-slate-500')} style={index === data.classification.breadcrumbs.length - 1 ? { background: item.color } : undefined}><span>{item.icon}</span>{item.name}</button>)}
-    </nav>
+    <nav aria-label="Classificação do relatório" className="-mx-4 mb-3 flex gap-2 overflow-x-auto border-b border-slate-100 px-4 py-3 scrollbar-none md:-mx-6 md:px-6"><button onClick={() => selectCategory(null)} className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-semibold ${!selected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}><Home size={15} /> Tudo</button>{data.classification.breadcrumbs.map((item, index) => <button key={item.id} onClick={() => selectCategory(item.id)} className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-semibold ${index === data.classification.breadcrumbs.length - 1 ? 'text-white' : 'bg-slate-100 text-slate-600'}`} style={index === data.classification.breadcrumbs.length - 1 ? { background: item.color } : undefined}><span>{item.icon}</span>{item.name}</button>)}</nav>
 
-    <div className="grid grid-cols-2 gap-3 min-[420px]:grid-cols-3 [&>*:last-child]:col-span-2 min-[420px]:[&>*:last-child]:col-span-1"><MetricCard label="Desembolso total" value={brl(data.totalSpent, 0)} detail={String(data.purchaseCount) + (data.purchaseCount === 1 ? ' compra' : ' compras')} /><MetricCard label="Média / mês" value={brl(data.history.reduce((sum, item) => sum + item.totalSpent, 0) / 6, 0)} detail="últimos 6 meses" tone="violet" /><MetricCard label="Parcela mensal estimada" value={brl(data.estimatedConsumption, 0)} detail="pela classificação cadastrada" tone="cyan" /></div>
-    <div className="mt-4 flex gap-3 rounded-2xl p-4 text-sm leading-6" style={{ background: color + '12', color }}><Info size={20} className="shrink-0" /><p>{data.purchaseCount ? 'Somando as compras em ' + title + ' e todos os seus subníveis.' : 'Ainda não há compras em ' + title + ' neste mês. Você pode continuar navegando pelo plano.'}</p></div>
+    <div className="-mx-4 mb-5 flex gap-2 overflow-x-auto px-4 py-2 scrollbar-none md:-mx-6 md:px-6" role="tablist">{views.map((item) => <button key={item.id} role="tab" aria-selected={view === item.id} onClick={() => setView(item.id)} className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold ${view === item.id ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}>{item.icon}{item.label}</button>)}</div>
 
-    <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between gap-3"><h2 className="text-base font-bold">{title} — últimos 6 meses</h2><span className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px]">Desembolso</span></div><div className="mt-5 flex h-40 items-end justify-between gap-2">{data.history.map((item) => <div key={String(item.year) + '-' + String(item.month)} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1"><span className="max-w-full truncate text-[12px] text-slate-500">{item.totalSpent ? brl(item.totalSpent, 0) : ''}</span><span className="w-full max-w-8 rounded-t transition-all" style={{ height: String(Math.max(item.totalSpent ? 8 : 2, item.totalSpent / max * 116)) + 'px', background: item.month === data.month && item.year === data.year ? color : color + '75' }} /><small className="text-[13px] text-slate-600">{item.label}</small></div>)}</div><div className="mt-4 flex flex-wrap gap-4 text-[13px] text-slate-600"><span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm" style={{ background: color }} />Desembolso</span><span><i className="mr-1 inline-block h-0.5 w-3 bg-cyan-500" />Consumo estimado</span></div></section>
+    {view === 'summary' && <SummaryView data={data} color={color} />}
+    {view === 'categories' && <CategoriesView data={data} selectCategory={selectCategory} color={color} />}
+    {view === 'prices' && <PricesView data={data} />}
+    {view === 'stock' && <StockView data={data} />}
 
-    {composition.length > 0 ? <section className="mt-4"><h2 className="mb-2 text-[11px] font-bold">Composição de {title}</h2><div className="mb-2 flex h-1.5 overflow-hidden rounded-full bg-slate-100">{composition.map((category) => <span key={category.id} className="h-full" style={{ width: String(data.totalSpent ? category.totalSpent / data.totalSpent * 100 : 100 / composition.length) + '%', background: category.color }} />)}</div><div className="grid gap-2">{composition.map((category) => <button key={category.id} onClick={() => selectCategory(category.id)} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-xl" style={{ background: category.color + '15' }}>{category.icon}</span><span className="min-w-0 flex-1"><strong className="block truncate text-[10px]">{category.name}</strong><small className="block truncate text-[8px] text-slate-400">{data.totalSpent ? String(Math.round(category.totalSpent / data.totalSpent * 100)) + '% · ' : ''}{category.productCount} {category.productCount === 1 ? 'produto' : 'produtos'}</small></span><b className="text-[10px]">{brl(category.totalSpent)}</b><ChevronRight size={14} className="text-slate-300" /></button>)}</div></section> :
-      <section className="mt-4"><h2 className="mb-2 text-[11px] font-bold">Produtos em {title}</h2>{products.length ? <div className="grid gap-2">{products.map((product) => <article key={product.id} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3"><span className="grid h-9 w-9 place-items-center rounded-xl" style={{ background: color + '15', color }}><Package size={16} /></span><span className="min-w-0 flex-1"><strong className="block truncate text-[10px]">{product.name}</strong><small className="text-[8px] text-slate-400">{brl(product.averageUnitPrice)}/{product.unit} · {product.purchaseCount} {product.purchaseCount === 1 ? 'compra' : 'compras'}</small></span><b className="text-[10px]">{brl(product.amount)}</b></article>)}</div> : <p className="rounded-xl border border-dashed border-slate-200 p-5 text-center text-[10px] text-slate-400">Nenhum produto classificado neste nível.</p>}</section>}
-
-    {composition.length > 0 && products.length > 0 && <section className="mt-4"><h2 className="mb-2 text-[11px] font-bold">Produtos diretamente em {title}</h2><div className="grid gap-2">{products.map((product) => <article key={product.id} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3"><span className="grid h-9 w-9 place-items-center rounded-xl" style={{ background: color + '15', color }}><Package size={16} /></span><span className="min-w-0 flex-1"><strong className="block truncate text-[10px]">{product.name}</strong><small className="text-[8px] text-slate-400">{brl(product.averageUnitPrice)}/{product.unit}</small></span><b className="text-[10px]">{brl(product.amount)}</b></article>)}</div></section>}
-    {data.insights.length > 0 && <section className="mt-4"><h2 className="mb-2 text-[11px] font-bold">O que explica a mudança</h2><div className="grid gap-2">{data.insights.slice(0, 4).map((insight) => <article key={insight.id} className="rounded-xl border border-slate-200 bg-white p-3"><div className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-lg" style={{ background: color + '12', color }}>↗</span><div className="flex-1"><strong className="text-[10px]">{insight.title}</strong><p className="text-[8px] text-slate-400">{insight.description}</p></div><b className="text-xs">+{brl(insight.amount, 0)}</b></div></article>)}</div></section>}
-    {loading && <div className="absolute inset-0 z-40 grid place-content-center bg-slate-50/70 backdrop-blur-[1px]"><span className="h-8 w-8 animate-spin rounded-full border-3 border-indigo-100 border-t-indigo-600" /></div>}
+    {loading && <div className="absolute inset-0 z-40 grid place-content-center bg-slate-50/70 backdrop-blur-[1px]"><span className="h-9 w-9 animate-spin rounded-full border-4 border-indigo-100 border-t-indigo-600" /></div>}
   </div>
 }

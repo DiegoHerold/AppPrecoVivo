@@ -17,6 +17,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
+    "db:seed:test-user": "node --conditions=react-server --import tsx prisma/seed-production-test-user.ts",
     "db:inference": "node --conditions=react-server --import tsx prisma/backfill-inference-events.ts",
     "postinstall": "prisma generate",
     "vercel-build": "prisma generate && prisma migrate deploy && npm run db:verify && next build"

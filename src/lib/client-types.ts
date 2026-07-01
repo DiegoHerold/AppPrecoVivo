@@ -17,7 +17,8 @@ export type UserDto = {
 export type CategoryDto = {
   id: string; parentId: string | null; name: string; icon: string; color: string; active: boolean; level: number; path: string[]
   allowedUnits: MeasureUnit[]
-  totalSpent: number; estimatedConsumption: number; stockAmount: number; variation: number; productCount: number
+  totalSpent: number; previousTotalSpent: number; estimatedConsumption: number; stockAmount: number; variation: number
+  variationPercentage: number | null; shareOfTotal: number; contributionToChange: number; productCount: number
 }
 export type PlanoContaNode = {
   id: string; nome: string; tipo: 'GRUPO' | 'PRODUTO'; parentId: string | null; produtoId: string | null
@@ -64,13 +65,33 @@ export type DashboardDto = {
   year: number; month: number; monthLabel: string; previousMonthLabel: string; totalSpent: number; previousTotalSpent: number
   difference: number; estimatedConsumption: number; stockAmount: number; recurringAmount: number; punctualAmount: number
   priceIncreaseAmount: number; quantityIncreaseAmount: number; purchaseCount: number; categories: CategoryDto[]
-  history: { label: string; month: number; year: number; totalSpent: number; estimatedConsumption: number }[]
+  comparison: {
+    kind: 'same_days_previous_month' | 'full_previous_month'; isPartial: boolean; throughDay: number
+    referenceThroughDay: number; label: string; differencePercentage: number | null
+  }
+  variation: {
+    components: { type: 'price' | 'quantity' | 'new_products' | 'removed_products' | 'mix'; label: string; description: string; amount: number }[]
+    principalMessage: string; reconciledTotal: number
+  }
+  productImpacts: {
+    id: string; name: string; behaviorType: BehaviorType; status: 'new' | 'removed' | 'changed' | 'out_of_pattern' | 'unit_incompatible'
+    currentAmount: number; referenceAmount: number; variation: number; variationPercentage: number | null
+    priceEffect: number; quantityEffect: number; mixEffect: number; currentUnitPrice: number | null
+    referenceUnitPrice: number | null; currentQuantity: number | null; referenceQuantity: number | null
+    unit: string | null; unitComparable: boolean
+  }[]
+  attention: {
+    id: string; type: string; title: string; description: string; amount: number | null
+    confidence: ConfidenceLevel | string | null; productId: string | null
+  }[]
+  history: { label: string; month: number; year: number; totalSpent: number; estimatedConsumption: number; partial: boolean }[]
   insights: InsightDto[]; outOfPattern: { name: string; amount: number; behaviorType: BehaviorType }[]
   classification: {
     selected: CategoryDto | null
     breadcrumbs: { id: string; name: string; icon: string; color: string }[]
     children: CategoryDto[]
-    products: { id: string; name: string; amount: number; purchaseCount: number; averageUnitPrice: number; unit: string }[]
+    directTotalSpent: number; directPreviousTotalSpent: number
+    products: { id: string; name: string; amount: number; previousAmount: number; variation: number; variationPercentage: number | null; purchaseCount: number; averageUnitPrice: number; unit: string }[]
   }
 }
 export type ProductDto = {

@@ -4,10 +4,16 @@ import {
   calculateEstimatedConsumption,
   calculateMonthlyFlow,
   detectOutOfPatternProducts,
-  explainMonthlyDifference,
   type FlowItem,
 } from '@/lib/domain'
-import { loadFlowItems, recalculateMonthlyFlow } from '@/lib/monthly-flow'
+import {
+  analyzeFlowVariation,
+  flowComparisonWindow,
+  itemsInRange,
+  scopeFlowItems,
+} from '@/lib/flow-analysis'
+import { loadFlowItemsRange } from '@/lib/monthly-flow'
+import { descendantIds, indexTree, pathOf } from '@/lib/plano-contas-tree'
 
 type PlanRow = {
   id: string
@@ -18,53 +24,17 @@ type PlanRow = {
   cor: string
   allowedUnits: string[]
   ativo: boolean
+  produtoId: string | null
   createdAt: Date
 }
 
 const round = (value: number) => Math.round(value * 100) / 100
+const roundTo = (value: number, digits: number) => Math.round(value * 10 ** digits) / 10 ** digits
 
 function monthName(year: number, month: number) {
   return new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' })
     .format(new Date(Date.UTC(year, month - 1, 1)))
     .replace(/^./, (letter) => letter.toUpperCase())
-}
-
-function previousMonth(year: number, month: number) {
-  const date = new Date(Date.UTC(year, month - 2, 1))
-  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1 }
-}
-
-function descendants(rows: PlanRow[], rootId: string) {
-  const ids = new Set([rootId])
-  let changed = true
-  while (changed) {
-    changed = false
-    for (const row of rows) {
-      if (row.parentId && ids.has(row.parentId) && !ids.has(row.id)) {
-        ids.add(row.id)
-        changed = true
-      }
-    }
-  }
-  return ids
-}
-
-function pathTo(row: PlanRow, byId: Map<string, PlanRow>) {
-  const path = [row]
-  const visited = new Set([row.id])
-  let parentId = row.parentId
-  while (parentId && !visited.has(parentId)) {
-    visited.add(parentId)
-    const parent = byId.get(parentId)
-    if (!parent) break
-    path.unshift(parent)
-    parentId = parent.parentId
-  }
-  return path
-}
-
-function scoped(items: FlowItem[], nodeIds: Set<string>) {
-  return items.filter((item) => Boolean(item.nodeId && nodeIds.has(item.nodeId)))
 }
 
 function spent(items: FlowItem[]) {
@@ -75,37 +45,95 @@ function consumed(items: FlowItem[]) {
   return items.reduce((sum, item) => sum + calculateEstimatedConsumption(item), 0)
 }
 
-export async function getClassificationDashboard(userId: string, year: number, month: number, categoryId?: string | null) {
-  const previous = previousMonth(year, month)
-  await recalculateMonthlyFlow(userId, year, month)
-  const [currentItems, previousItems, planRows] = await Promise.all([
-    loadFlowItems(userId, year, month),
-    loadFlowItems(userId, previous.year, previous.month),
+function ratio(value: number, total: number) {
+  return total ? Math.round(value / total * 100) : 0
+}
+
+function variationPercentage(current: number, previous: number) {
+  return previous ? roundTo((current - previous) / previous * 100, 1) : null
+}
+
+function relevantAttentionEvents(productIds: string[], userId: string, start: Date, end: Date) {
+  if (!productIds.length) return Promise.resolve([])
+  return prisma.inferenceEventLog.findMany({
+    where: {
+      userId,
+      productId: { in: productIds },
+      occurredAt: { gte: start, lt: end },
+      type: { in: ['possivel_periodo_sem_produto', 'compra_antecipada', 'compra_grande_volume', 'consumo_aumentando'] },
+    },
+    include: { product: { select: { standardName: true } } },
+    orderBy: { occurredAt: 'desc' },
+    take: 12,
+  })
+}
+
+export async function getClassificationDashboard(
+  userId: string,
+  year: number,
+  month: number,
+  categoryId?: string | null,
+  asOf: Date = new Date(),
+) {
+  const comparisonWindow = flowComparisonWindow(year, month, asOf)
+  const historyDates = Array.from(
+    { length: 6 },
+    (_value, index) => new Date(Date.UTC(year, month - 6 + index, 1)),
+  )
+  const rangeStart = historyDates[0] < comparisonWindow.referenceStart
+    ? historyDates[0]
+    : comparisonWindow.referenceStart
+  const rangeEnd = new Date(Date.UTC(year, month, 1))
+
+  // GET permanece leitura pura: os snapshots persistidos são atualizados nas
+  // mutações de compra/produto, enquanto este relatório deriva sua resposta
+  // diretamente das compras imutáveis.
+  const [allItems, planRows] = await Promise.all([
+    loadFlowItemsRange(userId, rangeStart, rangeEnd),
     prisma.planoConta.findMany({
       where: { userId },
-      select: { id: true, parentId: true, tipo: true, nome: true, icone: true, cor: true, allowedUnits: true, ativo: true, createdAt: true },
+      select: {
+        id: true,
+        parentId: true,
+        tipo: true,
+        nome: true,
+        icone: true,
+        cor: true,
+        allowedUnits: true,
+        ativo: true,
+        produtoId: true,
+        createdAt: true,
+      },
       orderBy: { createdAt: 'asc' },
     }),
   ])
+
   const rows = planRows as PlanRow[]
-  const byId = new Map(rows.map((row) => [row.id, row]))
+  const { byId } = indexTree(rows)
   const selected = categoryId ? byId.get(categoryId) : undefined
-  if (categoryId && !selected) throw new Error('Classificação não encontrada.')
-  const scopeIds = selected ? descendants(rows, selected.id) : new Set(rows.map((row) => row.id))
-  const current = scoped(currentItems, scopeIds)
-  const before = scoped(previousItems, scopeIds)
+  if (categoryId && (!selected || selected.tipo !== 'GRUPO')) {
+    throw new Error('Classificação não encontrada.')
+  }
+
+  const scopeIds = selected
+    ? descendantIds(rows, selected.id)
+    : new Set(rows.map((row) => row.id))
+  const selectedPeriodItems = itemsInRange(allItems, comparisonWindow.selectedStart, comparisonWindow.selectedEnd)
+  const referencePeriodItems = itemsInRange(allItems, comparisonWindow.referenceStart, comparisonWindow.referenceEnd)
+  const current = scopeFlowItems(selectedPeriodItems, scopeIds)
+  const before = scopeFlowItems(referencePeriodItems, scopeIds)
   const flow = calculateMonthlyFlow(current, before)
+  const variation = analyzeFlowVariation(current, before)
   const outOfPattern = detectOutOfPatternProducts(current, before)
 
-  // Apenas os nós GRUPO compõem a navegação de classificação; produtos são folhas.
   const groups = rows.filter((row) => row.tipo === 'GRUPO')
   const categories = groups.map((group) => {
-    const ids = descendants(rows, group.id)
-    const groupItems = scoped(currentItems, ids)
-    const priorItems = scoped(previousItems, ids)
+    const ids = descendantIds(rows, group.id)
+    const groupItems = scopeFlowItems(selectedPeriodItems, ids)
+    const priorItems = scopeFlowItems(referencePeriodItems, ids)
     const total = spent(groupItems)
-    const consumption = consumed(groupItems)
-    const path = pathTo(group, byId)
+    const previousTotal = spent(priorItems)
+    const path = pathOf(group, byId)
     return {
       id: group.id,
       parentId: group.parentId,
@@ -117,98 +145,186 @@ export async function getClassificationDashboard(userId: string, year: number, m
       level: path.length - 1,
       path: path.map((item) => item.nome),
       totalSpent: round(total),
-      estimatedConsumption: round(consumption),
-      stockAmount: round(total - consumption),
-      variation: round(total - spent(priorItems)),
+      previousTotalSpent: round(previousTotal),
+      estimatedConsumption: round(consumed(groupItems)),
+      stockAmount: round(total - consumed(groupItems)),
+      variation: round(total - previousTotal),
+      variationPercentage: variationPercentage(total, previousTotal),
+      shareOfTotal: ratio(total, flow.totalSpent),
+      contributionToChange: variation.difference ? round((total - previousTotal) / variation.difference * 100) : 0,
       productCount: new Set(groupItems.map((item) => item.key)).size,
     }
-  }).sort((a, b) => a.path.join(' / ').localeCompare(b.path.join(' / '), 'pt-BR'))
+  }).sort((left, right) => left.path.join(' / ').localeCompare(right.path.join(' / '), 'pt-BR'))
   const categoryById = new Map(categories.map((category) => [category.id, category]))
 
-  const dates = Array.from({ length: 6 }, (_value, index) => new Date(Date.UTC(year, month - 6 + index, 1)))
-  const monthlyItems = await Promise.all(dates.map((date) => loadFlowItems(userId, date.getUTCFullYear(), date.getUTCMonth() + 1)))
-  const history = dates.map((date, index) => {
-    const items = scoped(monthlyItems[index], scopeIds)
+  const history = historyDates.map((date) => {
+    const historyStart = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1))
+    const naturalEnd = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1))
+    const isSelectedMonth = date.getUTCFullYear() === year && date.getUTCMonth() + 1 === month
+    const historyEnd = isSelectedMonth ? comparisonWindow.selectedEnd : naturalEnd
+    const items = scopeFlowItems(itemsInRange(allItems, historyStart, historyEnd), scopeIds)
     return {
       label: monthName(date.getUTCFullYear(), date.getUTCMonth() + 1).slice(0, 3),
       month: date.getUTCMonth() + 1,
       year: date.getUTCFullYear(),
       totalSpent: round(spent(items)),
       estimatedConsumption: round(consumed(items)),
+      partial: isSelectedMonth && comparisonWindow.isPartial,
     }
   })
 
-  // Produtos exibidos: itens cujo grupo é exatamente o selecionado (produtos diretos do nível).
+  const directParentId = selected?.id ?? null
+  const directCurrent = current.filter((item) => item.groupId === directParentId)
+  const directBefore = before.filter((item) => item.groupId === directParentId)
+  const directVariation = analyzeFlowVariation(directCurrent, directBefore)
+  const directImpactById = new Map(directVariation.productImpacts.map((impact) => [impact.id, impact]))
   const productGroups = new Map<string, { name: string; amount: number; prices: number[]; unit: string; purchases: Set<string> }>()
-  const productItems = selected ? current.filter((item) => item.groupId === selected.id) : []
-  for (const item of productItems) {
+  for (const item of directCurrent) {
     const group = productGroups.get(item.key) ?? {
       name: item.name,
       amount: 0,
       prices: [],
-      unit: item.unit ?? 'un',
+      unit: item.comparableUnit ?? item.unit ?? 'un',
       purchases: new Set<string>(),
     }
     group.amount += item.totalPrice
-    group.prices.push(item.unitPrice)
+    if (item.comparableQuantity && item.comparableQuantity > 0) {
+      group.prices.push(item.totalPrice / item.comparableQuantity)
+    }
     if (item.purchaseId) group.purchases.add(item.purchaseId)
     productGroups.set(item.key, group)
   }
 
-  const insights: { id: string; type: string; title: string; description: string; amount: number }[] = explainMonthlyDifference(current, before)
-    .filter((item) => item.amount > 0.009)
-    .map((item, index) => ({
-      id: (selected?.id ?? 'all') + '-' + item.type + '-' + index,
-      type: item.type,
-      title: item.title,
-      description: item.description,
-      amount: round(item.amount),
-    }))
-  if (outOfPattern.length) {
-    insights.push({
-      id: (selected?.id ?? 'all') + '-fora-do-padrao',
-      type: 'fora_do_padrao',
-      title: 'Produtos fora do padrão',
-      description: String(outOfPattern.length) + (outOfPattern.length === 1 ? ' produto saiu' : ' produtos saíram') + ' do seu padrão neste mês.',
-      amount: round(outOfPattern.reduce((sum, item) => sum + item.totalPrice, 0)),
-    })
-  }
+  const productIds = rows
+    .filter((row) => row.produtoId && scopeIds.has(row.id))
+    .flatMap((row) => row.produtoId ? [row.produtoId] : [])
+  const inferenceEvents = await relevantAttentionEvents(
+    productIds,
+    userId,
+    comparisonWindow.selectedStart,
+    comparisonWindow.selectedEnd,
+  )
+
+  const attention = [
+    ...variation.productImpacts
+      .filter((impact) => impact.priceEffect > 0.009)
+      .map((impact) => ({
+        id: `price-${impact.id}`,
+        type: 'price_increase',
+        title: `${impact.name} ficou mais caro`,
+        description: impact.unitComparable
+          ? `O efeito de preço acrescentou ${round(impact.priceEffect).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} no período comparável.`
+          : 'A unidade não permitiu uma comparação segura de preço.',
+        amount: round(impact.priceEffect),
+        confidence: null,
+        productId: impact.id,
+      })),
+    ...variation.productImpacts
+      .filter((impact) => impact.status === 'unit_incompatible')
+      .map((impact) => ({
+        id: `unit-${impact.id}`,
+        type: 'unit_incompatible',
+        title: `Confira a unidade de ${impact.name}`,
+        description: 'Preço e quantidade não foram separados porque as unidades não são comparáveis com segurança.',
+        amount: Math.abs(impact.variation),
+        confidence: 'instavel',
+        productId: impact.id,
+      })),
+    ...inferenceEvents.map((event) => ({
+      id: event.id,
+      type: event.type,
+      title: event.title,
+      description: `${event.product.standardName}: ${event.description}`,
+      amount: null,
+      confidence: event.confidence,
+      productId: event.productId,
+    })),
+  ].sort((left, right) => Math.abs(right.amount ?? 0) - Math.abs(left.amount ?? 0)).slice(0, 8)
 
   const children = categories
-    .filter((category) => category.parentId === (selected?.id ?? null) && (category.active || category.totalSpent > 0))
-    .sort((a, b) => b.totalSpent - a.totalSpent || a.name.localeCompare(b.name, 'pt-BR'))
+    .filter((category) => category.parentId === directParentId && (category.totalSpent > 0 || category.previousTotalSpent > 0))
+    .map((category) => ({
+      ...category,
+      shareOfTotal: ratio(category.totalSpent, flow.totalSpent),
+      contributionToChange: variation.difference ? round(category.variation / variation.difference * 100) : 0,
+    }))
+    .sort((left, right) => right.totalSpent - left.totalSpent || left.name.localeCompare(right.name, 'pt-BR'))
+
+  const previousMonthLabel = monthName(
+    comparisonWindow.referenceStart.getUTCFullYear(),
+    comparisonWindow.referenceStart.getUTCMonth() + 1,
+  )
 
   return {
     year,
     month,
     monthLabel: monthName(year, month),
-    previousMonthLabel: monthName(previous.year, previous.month),
+    previousMonthLabel,
     totalSpent: round(flow.totalSpent),
     previousTotalSpent: round(flow.previousTotalSpent),
-    difference: round(flow.totalSpent - flow.previousTotalSpent),
+    difference: variation.difference,
     estimatedConsumption: round(flow.estimatedConsumption),
     stockAmount: round(flow.stockAmount),
     recurringAmount: round(flow.recurringAmount),
     punctualAmount: round(flow.punctualAmount),
-    priceIncreaseAmount: round(flow.priceIncreaseAmount),
-    quantityIncreaseAmount: round(flow.quantityIncreaseAmount),
+    priceIncreaseAmount: round(Math.max(0, variation.components.find((component) => component.type === 'price')?.amount ?? 0)),
+    quantityIncreaseAmount: round(Math.max(0, variation.components.find((component) => component.type === 'quantity')?.amount ?? 0)),
     purchaseCount: new Set(current.flatMap((item) => item.purchaseId ? [item.purchaseId] : [])).size,
+    comparison: {
+      kind: comparisonWindow.comparisonKind,
+      isPartial: comparisonWindow.isPartial,
+      throughDay: comparisonWindow.throughDay,
+      referenceThroughDay: comparisonWindow.referenceThroughDay,
+      label: comparisonWindow.isPartial
+        ? `Até o dia ${comparisonWindow.throughDay} versus os mesmos dias de ${previousMonthLabel}`
+        : `${monthName(year, month)} versus ${previousMonthLabel}`,
+      differencePercentage: variation.differencePercentage,
+    },
+    variation: {
+      components: variation.components,
+      principalMessage: variation.principalMessage,
+      reconciledTotal: round(variation.components.reduce((sum, component) => sum + component.amount, 0)),
+    },
+    productImpacts: variation.productImpacts,
+    attention,
     categories,
     history,
-    insights,
-    outOfPattern: outOfPattern.map((item) => ({ name: item.name, amount: item.totalPrice, behaviorType: item.behaviorType })),
+    insights: variation.components
+      .filter((component) => Math.abs(component.amount) > 0.009)
+      .map((component) => ({
+        id: `${selected?.id ?? 'all'}-${component.type}`,
+        type: component.type,
+        title: component.label,
+        description: component.description,
+        amount: component.amount,
+      })),
+    outOfPattern: outOfPattern.map((item) => ({
+      name: item.name,
+      amount: item.totalPrice,
+      behaviorType: item.behaviorType,
+    })),
     classification: {
       selected: selected ? categoryById.get(selected.id) ?? null : null,
-      breadcrumbs: selected ? pathTo(selected, byId).map((row) => ({ id: row.id, name: row.nome, icon: row.icone, color: row.cor })) : [],
+      breadcrumbs: selected
+        ? pathOf(selected, byId).map((row) => ({ id: row.id, name: row.nome, icon: row.icone, color: row.cor }))
+        : [],
       children,
-      products: Array.from(productGroups.entries()).map(([id, group]) => ({
-        id,
-        name: group.name,
-        amount: round(group.amount),
-        purchaseCount: group.purchases.size,
-        averageUnitPrice: round(group.prices.reduce((sum, price) => sum + price, 0) / Math.max(1, group.prices.length)),
-        unit: group.unit,
-      })).sort((a, b) => b.amount - a.amount),
+      directTotalSpent: round(spent(directCurrent)),
+      directPreviousTotalSpent: round(spent(directBefore)),
+      products: Array.from(productGroups.entries()).map(([id, group]) => {
+        const impact = directImpactById.get(id)
+        return {
+          id,
+          name: group.name,
+          amount: round(group.amount),
+          previousAmount: impact?.referenceAmount ?? 0,
+          variation: impact?.variation ?? group.amount,
+          variationPercentage: impact?.variationPercentage ?? null,
+          purchaseCount: group.purchases.size,
+          averageUnitPrice: round(group.prices.reduce((sum, price) => sum + price, 0) / Math.max(1, group.prices.length)),
+          unit: group.unit,
+        }
+      }).sort((left, right) => right.amount - left.amount),
     },
   }
 }

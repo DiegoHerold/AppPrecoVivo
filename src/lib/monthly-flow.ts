@@ -6,6 +6,7 @@ import {
   explainMonthlyDifference,
   type FlowItem,
 } from '@/lib/domain'
+import { toStandardUnit } from '@/domain/value-objects/quantity'
 
 const number = (value: unknown) => Number(value ?? 0)
 const round = (value: number) => Math.round(value * 100) / 100
@@ -24,29 +25,42 @@ function previousMonth(year: number, month: number) {
 
 export async function loadFlowItems(userId: string, year: number, month: number): Promise<FlowItem[]> {
   const range = monthRange(year, month)
+  return loadFlowItemsRange(userId, range.start, range.end)
+}
+
+export async function loadFlowItemsRange(userId: string, start: Date, end: Date): Promise<FlowItem[]> {
   const rows = await prisma.purchaseItem.findMany({
     where: {
-      purchase: { userId, purchaseDate: { gte: range.start, lt: range.end } },
+      purchase: { userId, purchaseDate: { gte: start, lt: end } },
     },
     include: {
-      product: { select: { standardName: true } },
+      purchase: { select: { purchaseDate: true } },
+      product: { select: { standardName: true, defaultUnit: true } },
       planoConta: { select: { id: true, nome: true, parentId: true } },
     },
+    orderBy: { purchase: { purchaseDate: 'asc' } },
   })
 
-  return rows.map((item) => ({
-    key: item.planoContaId,
-    name: item.planoConta.nome ?? item.product.standardName ?? item.rawName,
-    purchaseId: item.purchaseId,
-    quantity: number(item.quantity),
-    unit: item.unit,
-    unitPrice: number(item.unitPrice),
-    totalPrice: number(item.totalPrice),
-    behaviorType: item.behaviorType,
-    estimatedDurationMonths: number(item.estimatedDurationMonths),
-    nodeId: item.planoContaId,
-    groupId: item.planoConta.parentId,
-  }))
+  return rows.map((item) => {
+    const quantity = number(item.quantity)
+    const comparable = toStandardUnit({ amount: quantity, unit: item.unit }, item.product.defaultUnit)
+    return {
+      key: item.planoContaId,
+      name: item.planoConta.nome ?? item.product.standardName ?? item.rawName,
+      purchaseId: item.purchaseId,
+      purchaseDate: item.purchase.purchaseDate,
+      quantity,
+      unit: item.unit,
+      unitPrice: number(item.unitPrice),
+      totalPrice: number(item.totalPrice),
+      behaviorType: item.behaviorType,
+      estimatedDurationMonths: number(item.estimatedDurationMonths),
+      comparableQuantity: comparable.converted ? comparable.amount : null,
+      comparableUnit: comparable.converted ? item.product.defaultUnit : null,
+      nodeId: item.planoContaId,
+      groupId: item.planoConta.parentId,
+    }
+  })
 }
 
 export async function recalculateMonthlyFlow(userId: string, year: number, month: number) {

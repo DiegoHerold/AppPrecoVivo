@@ -65,3 +65,29 @@ npm run build
 ```
 
 As regras de normalização, similaridade, comportamento, duração, consumo mensal, fluxo e detecção de desvios ficam em `src/lib/domain.ts`, fora dos componentes visuais.
+
+## Conta permanente de homologação
+
+O banco de produção pode receber uma única conta sintética, marcada por `User.isTestAccount`. A flag não faz parte do DTO público de autenticação e deve ser usada para excluir essa conta de futuras métricas administrativas ou comerciais (`where: { isTestAccount: false }`). Atualmente o app não possui agregados globais entre usuários.
+
+Antes de executar, publique as migrações e configure as variáveis somente no ambiente seguro de operação:
+
+```text
+PRODUCTION_TEST_USER_EMAIL
+PRODUCTION_TEST_USER_PASSWORD
+PRODUCTION_TEST_DATABASE_HOST
+ALLOW_PRODUCTION_TEST_USER_SEED=true
+```
+
+`PRODUCTION_TEST_DATABASE_HOST` deve ser exatamente o hostname de `DATABASE_URL`. O comando recusa localhost, senha com menos de 12 caracteres, ausência da confirmação e qualquer e-mail já pertencente a uma conta comum.
+
+Opcionalmente, defina `PRODUCTION_TEST_REFERENCE_DATE=AAAA-MM-DD` para reproduzir o mesmo período. Sem essa variável, a data atual é usada.
+
+```bash
+npm run db:deploy
+npm run db:seed:test-user
+```
+
+O seed é idempotente: apaga e recria apenas compras, produtos, plano, sessões e agregados da conta marcada como teste. Nenhuma outra conta é alterada. A saída contém somente e-mail e contagens; a senha nunca é registrada.
+
+Para rotacionar a credencial, atualize `PRODUCTION_TEST_USER_PASSWORD` no gerenciador de segredos e execute novamente `npm run db:seed:test-user`. A nova senha substitui o hash anterior e as sessões da conta são encerradas.

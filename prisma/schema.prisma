@@ -91,6 +91,7 @@ model User {
   name            String
   email           String           @unique
   passwordHash    String
+  isTestAccount   Boolean          @default(false)
   phone           String?
   city            String?
   state           String?
@@ -106,6 +107,8 @@ model User {
   inferenceEvents InferenceEventLog[]
   settings        UserSettings?
   uploadedFiles   UploadedFile[]
+
+  @@index([isTestAccount])
 }
 
 model UserSettings {
