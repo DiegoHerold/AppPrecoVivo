@@ -82,7 +82,7 @@ function MonthComparisonControls({ data, selected, comparison, selectPeriod, sel
   return <section className="mb-5 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
     <div className="flex items-start justify-between gap-3">
       <div className="flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-700"><CalendarDays size={20} /></span><div><h2 className="font-bold text-slate-950">Períodos da análise</h2><p className="mt-0.5 text-sm text-slate-600">Escolha os dois meses que deseja comparar.</p></div></div>
-      <button onClick={swapPeriods} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-700"><ArrowLeftRight size={17} /><span className="hidden sm:inline">Trocar</span></button>
+      <button aria-label="Trocar períodos" title="Trocar períodos" onClick={swapPeriods} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-700"><ArrowLeftRight size={17} /><span className="hidden sm:inline">Trocar</span></button>
     </div>
     <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
       <label className="grid gap-1.5 text-sm font-bold text-slate-700">Mês analisado<select aria-label="Mês analisado" value={selectedKey} onChange={(event) => selectPeriod(parse(event.target.value))} className="min-h-12 rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-base font-bold text-indigo-950 outline-none focus:border-indigo-500">{options.map((option) => <option key={periodKey(option)} value={periodKey(option)} disabled={periodKey(option) === comparisonKey}>{periodLabel(option)}</option>)}</select></label>
