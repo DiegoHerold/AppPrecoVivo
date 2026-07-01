@@ -98,11 +98,11 @@ export type ProductDto = {
   id: string; accountPlanId: string; accountName: string; accountActive: boolean
   standardName: string; brand?: string | null; behaviorType: BehaviorType; estimatedDurationMonths: number
   defaultUnit: string; packageSize?: string | null; categoryName: string; categoryIcon: string; categoryColor: string
-  lastPrice: number; lastPurchaseDate: string | null; purchaseCount: number
+  lastPrice: number; monthlyCost: number; lastPurchaseDate: string | null; purchaseCount: number
 }
 export type ProductDetailDto = ProductDto & {
   categoryId: string; allowedUnits: MeasureUnit[]
-  minimumPrice: number; maximumPrice: number; averagePrice: number; averageQuantity: number; frequencyDays: number | null; monthlyCost: number
+  minimumPrice: number; maximumPrice: number; averagePrice: number; averageQuantity: number; frequencyDays: number | null
   history: { id: string; purchaseDate: string; storeName: string; quantity: number; unit: string; unitPrice: number; totalPrice: number }[]
 }
 export type ReviewDto = {

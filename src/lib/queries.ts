@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { calculateEstimatedConsumption } from '@/lib/domain'
+import { normalizeProductPurchaseMetrics } from '@/lib/product-metrics'
 
 const toNumber = (value: unknown) => Number(value ?? 0)
 const round = (value: number) => Math.round(value * 100) / 100
@@ -19,6 +20,16 @@ export async function listProducts(userId: string) {
     if (!product.node) throw new Error('Produto sem nó correspondente no plano de contas.')
     const group = product.node.parent ?? FALLBACK_GROUP
     const history = product.items.sort((a, b) => b.purchase.purchaseDate.getTime() - a.purchase.purchaseDate.getTime())
+    const latestComparable = history
+      .map((item) => normalizeProductPurchaseMetrics({
+        quantity: toNumber(item.quantity),
+        unit: item.unit,
+        unitPrice: toNumber(item.unitPrice),
+        totalPrice: toNumber(item.totalPrice),
+        defaultUnit: product.defaultUnit,
+      }))
+      .find((item) => item.comparable)
+    const latestTotal = toNumber(history[0]?.totalPrice)
     return {
       id: product.id,
       accountPlanId: product.node.id,
@@ -33,7 +44,8 @@ export async function listProducts(userId: string) {
       categoryName: group.nome,
       categoryIcon: group.icone,
       categoryColor: group.cor,
-      lastPrice: toNumber(history[0]?.unitPrice),
+      lastPrice: round(latestComparable?.unitPrice ?? toNumber(history[0]?.unitPrice)),
+      monthlyCost: round(latestTotal / Math.max(1, toNumber(product.estimatedDurationMonths))),
       lastPurchaseDate: history[0]?.purchase.purchaseDate.toISOString() ?? null,
       purchaseCount: new Set(history.map((item) => item.purchaseId)).size,
     }
@@ -52,9 +64,17 @@ export async function getProductDetail(userId: string, productId: string) {
   if (!product.node) throw new Error('Produto sem nó correspondente no plano de contas.')
   const group = product.node.parent ?? FALLBACK_GROUP
   const history = product.items.sort((a, b) => b.purchase.purchaseDate.getTime() - a.purchase.purchaseDate.getTime())
-  const prices = history.map((item) => toNumber(item.unitPrice))
+  const normalizedHistory = history.map((item) => normalizeProductPurchaseMetrics({
+    quantity: toNumber(item.quantity),
+    unit: item.unit,
+    unitPrice: toNumber(item.unitPrice),
+    totalPrice: toNumber(item.totalPrice),
+    defaultUnit: product.defaultUnit,
+  }))
+  const comparableHistory = normalizedHistory.filter((item) => item.comparable)
+  const prices = comparableHistory.map((item) => item.unitPrice)
   const averagePrice = prices.length ? prices.reduce((sum, price) => sum + price, 0) / prices.length : 0
-  const averageQuantity = history.length ? history.reduce((sum, item) => sum + toNumber(item.quantity), 0) / history.length : 0
+  const averageQuantity = comparableHistory.length ? comparableHistory.reduce((sum, item) => sum + item.quantity, 0) / comparableHistory.length : 0
   const intervals = history.slice(0, -1).map((item, index) => Math.abs(item.purchase.purchaseDate.getTime() - history[index + 1].purchase.purchaseDate.getTime()) / 86_400_000)
   return {
     id: product.id,
@@ -72,13 +92,13 @@ export async function getProductDetail(userId: string, productId: string) {
     categoryColor: group.cor,
     categoryId: group.id,
     allowedUnits: group.allowedUnits,
-    lastPrice: prices[0] ?? 0,
+    lastPrice: round(prices[0] ?? toNumber(history[0]?.unitPrice)),
     minimumPrice: prices.length ? Math.min(...prices) : 0,
     maximumPrice: prices.length ? Math.max(...prices) : 0,
     averagePrice: round(averagePrice),
     averageQuantity: round(averageQuantity),
     frequencyDays: intervals.length ? Math.round(intervals.reduce((sum, value) => sum + value, 0) / intervals.length) : null,
-    monthlyCost: round((prices[0] ?? averagePrice) / Math.max(1, toNumber(product.estimatedDurationMonths))),
+    monthlyCost: round(toNumber(history[0]?.totalPrice) / Math.max(1, toNumber(product.estimatedDurationMonths))),
     history: history.map((item) => ({
       id: item.id,
       purchaseDate: item.purchase.purchaseDate.toISOString(),

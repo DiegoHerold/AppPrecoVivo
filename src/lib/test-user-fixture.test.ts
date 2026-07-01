@@ -12,6 +12,21 @@ test('fixture de produção é determinística e cobre doze meses', () => {
   assert.equal(first.stores.length >= 3, true)
 })
 
+test('meses completos representam um orçamento doméstico próximo de mil reais', () => {
+  const fixture = buildProductionTestFixture(new Date('2026-07-18T12:00:00Z'))
+  const totals = new Map<string, number>()
+  for (const purchase of fixture.purchases) {
+    const key = `${purchase.date.getUTCFullYear()}-${purchase.date.getUTCMonth() + 1}`
+    const total = purchase.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
+    totals.set(key, (totals.get(key) ?? 0) + total)
+  }
+  const fullMonths = [...totals.entries()].filter(([key]) => key !== '2026-7').map(([, total]) => total)
+  const average = fullMonths.reduce((sum, total) => sum + total, 0) / fullMonths.length
+  assert.equal(average >= 900 && average <= 1150, true)
+  assert.equal(Math.min(...fullMonths) < 900, true)
+  assert.equal(Math.max(...fullMonths) > 1200, true)
+})
+
 test('mês atual nunca recebe compras futuras e permanece parcial', () => {
   const date = new Date('2026-07-10T12:00:00Z')
   const fixture = buildProductionTestFixture(date)
@@ -30,4 +45,6 @@ test('fixture contém normalização, incompatibilidade, sazonalidade, emergênc
   assert.equal(items.some((item) => item.productKey === 'panetone'), true)
   assert.equal(items.some((item) => item.productKey === 'analgesico'), true)
   assert.equal(items.some((item) => item.productKey === 'fone'), true)
+  assert.equal(items.some((item) => item.matchConfidence === 0.82), true)
+  assert.equal(items.some((item) => item.matchConfidence === 0.55), true)
 })

@@ -204,7 +204,7 @@ async function main() {
           totalPrice,
           behaviorType: spec.behaviorType,
           estimatedDurationMonths: spec.estimatedDurationMonths,
-          matchConfidence: item.needsReview ? 0.6 : 1,
+          matchConfidence: item.matchConfidence ?? (item.needsReview ? 0.6 : 1),
           needsReview: item.needsReview ?? false,
         }
       })

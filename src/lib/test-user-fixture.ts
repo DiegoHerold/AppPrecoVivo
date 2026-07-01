@@ -21,6 +21,7 @@ export type TestPurchaseItem = {
   quantity: number
   unit: string
   unitPrice: number
+  matchConfidence?: number
   needsReview?: boolean
 }
 
@@ -37,6 +38,8 @@ export const TEST_STORES: TestStoreSpec[] = [
   { key: 'central', name: 'Supermercado Central', type: 'mercado', document: 'TEST-HOMOLOG-002' },
   { key: 'economico', name: 'Atacado Econômico', type: 'atacado', document: 'TEST-HOMOLOG-003' },
   { key: 'farmacia', name: 'Farmácia Horizonte', type: 'farmacia', document: 'TEST-HOMOLOG-004' },
+  { key: 'feira', name: 'Feira do Bairro', type: 'loja', document: 'TEST-HOMOLOG-005' },
+  { key: 'padaria', name: 'Padaria Vila Nova', type: 'padaria', document: 'TEST-HOMOLOG-006' },
 ]
 
 export const TEST_PRODUCTS: TestProductSpec[] = [
@@ -47,11 +50,29 @@ export const TEST_PRODUCTS: TestProductSpec[] = [
   { key: 'leite', name: 'Leite integral', category: 'Leite', defaultUnit: 'L', behaviorType: 'recorrente_semanal', estimatedDurationMonths: 1 },
   { key: 'ovos', name: 'Ovos brancos', category: 'Alimentação', defaultUnit: 'dz', behaviorType: 'recorrente_semanal', estimatedDurationMonths: 1 },
   { key: 'banana', name: 'Banana prata', category: 'Frutas', defaultUnit: 'kg', behaviorType: 'recorrente_semanal', estimatedDurationMonths: 1 },
+  { key: 'maca', name: 'Maçã gala', category: 'Frutas', defaultUnit: 'kg', behaviorType: 'recorrente_semanal', estimatedDurationMonths: 1 },
+  { key: 'tomate', name: 'Tomate italiano', category: 'Legumes', defaultUnit: 'kg', behaviorType: 'recorrente_semanal', estimatedDurationMonths: 1 },
+  { key: 'batata', name: 'Batata inglesa', category: 'Legumes', defaultUnit: 'kg', behaviorType: 'recorrente_semanal', estimatedDurationMonths: 1 },
+  { key: 'alface', name: 'Alface crespa', category: 'Verduras', defaultUnit: 'un', behaviorType: 'recorrente_semanal', estimatedDurationMonths: 1 },
   { key: 'frango', name: 'Filé de frango', category: 'Frango', defaultUnit: 'kg', behaviorType: 'recorrente_semanal', estimatedDurationMonths: 1 },
+  { key: 'carne', name: 'Patinho bovino', category: 'Bovinos', defaultUnit: 'kg', behaviorType: 'recorrente_semanal', estimatedDurationMonths: 1 },
+  { key: 'porco', name: 'Lombo suíno', category: 'Suínos', defaultUnit: 'kg', behaviorType: 'recorrente_mensal', estimatedDurationMonths: 1 },
+  { key: 'pao', name: 'Pão francês', category: 'Padaria', defaultUnit: 'kg', behaviorType: 'recorrente_semanal', estimatedDurationMonths: 1 },
+  { key: 'queijo', name: 'Queijo muçarela', category: 'Queijo', defaultUnit: 'kg', behaviorType: 'recorrente_semanal', estimatedDurationMonths: 1 },
   { key: 'iogurte', name: 'Iogurte natural', category: 'Iogurte', defaultUnit: 'un', behaviorType: 'recorrente_semanal', estimatedDurationMonths: 1 },
   { key: 'granola', name: 'Granola tradicional', category: 'Aveia', defaultUnit: 'kg', behaviorType: 'recorrente_mensal', estimatedDurationMonths: 1 },
+  { key: 'macarrao', name: 'Macarrão espaguete', category: 'Grãos e Cereais', defaultUnit: 'pct', behaviorType: 'recorrente_mensal', estimatedDurationMonths: 1 },
+  { key: 'molho', name: 'Molho de tomate', category: 'Temperos e Condimentos', defaultUnit: 'un', behaviorType: 'recorrente_mensal', estimatedDurationMonths: 1 },
+  { key: 'farinha', name: 'Farinha de trigo', category: 'Grãos e Cereais', defaultUnit: 'kg', behaviorType: 'recorrente_mensal', estimatedDurationMonths: 1 },
+  { key: 'acucar', name: 'Açúcar cristal', category: 'Grãos e Cereais', defaultUnit: 'kg', behaviorType: 'recorrente_mensal', estimatedDurationMonths: 1 },
+  { key: 'suco', name: 'Suco integral', category: 'Bebidas', defaultUnit: 'L', behaviorType: 'recorrente_mensal', estimatedDurationMonths: 1 },
+  { key: 'biscoito', name: 'Biscoito integral', category: 'Doces e Snacks', defaultUnit: 'pct', behaviorType: 'recorrente_mensal', estimatedDurationMonths: 1 },
   { key: 'detergente', name: 'Detergente neutro', category: 'Limpeza', defaultUnit: 'un', behaviorType: 'recorrente_mensal', estimatedDurationMonths: 1 },
+  { key: 'sabao', name: 'Sabão líquido para roupas', category: 'Limpeza', defaultUnit: 'L', behaviorType: 'estoque', estimatedDurationMonths: 2 },
+  { key: 'amaciante', name: 'Amaciante concentrado', category: 'Limpeza', defaultUnit: 'L', behaviorType: 'estoque', estimatedDurationMonths: 2 },
   { key: 'papel', name: 'Papel higiênico', category: 'Higiene', defaultUnit: 'pct', behaviorType: 'estoque', estimatedDurationMonths: 2 },
+  { key: 'sabonete', name: 'Sabonete', category: 'Higiene', defaultUnit: 'un', behaviorType: 'recorrente_mensal', estimatedDurationMonths: 1 },
+  { key: 'creme_dental', name: 'Creme dental', category: 'Higiene', defaultUnit: 'un', behaviorType: 'recorrente_mensal', estimatedDurationMonths: 1 },
   { key: 'shampoo', name: 'Shampoo diário', category: 'Cuidados pessoais', defaultUnit: 'L', behaviorType: 'recorrente_mensal', estimatedDurationMonths: 1 },
   { key: 'desinfetante', name: 'Desinfetante lavanda', category: 'Limpeza', defaultUnit: 'L', behaviorType: 'estoque', estimatedDurationMonths: 2 },
   { key: 'analgesico', name: 'Analgésico', category: 'Medicamentos', defaultUnit: 'cx', behaviorType: 'emergencia', estimatedDurationMonths: 1 },
@@ -74,7 +95,26 @@ function currentMonthDay(referenceDate: Date, preferredDay: number) {
 }
 
 function gradual(base: number, monthIndex: number, extra = 0) {
-  return money(base * (1 + monthIndex * 0.012 + extra))
+  return money(base * (1 + monthIndex * 0.009 + extra))
+}
+
+const demandProfiles = [0.78, 0.86, 0.94, 0.8, 0.99, 0.89, 1.08, 0.82, 0.95, 1.02, 1.14, 1]
+const storePriceFactors: Record<string, number> = {
+  economico: 0.94,
+  aurora: 1,
+  central: 1.04,
+  feira: 0.97,
+  padaria: 1.08,
+  farmacia: 1.06,
+}
+
+function quantity(base: number, demand: number, discrete = false) {
+  const value = base * demand
+  return discrete ? Math.max(1, Math.round(value)) : Math.max(0.1, Math.round(value * 100) / 100)
+}
+
+function priced(base: number, monthIndex: number, storeKey: string, extra = 0) {
+  return money(gradual(base, monthIndex, extra) * (storePriceFactors[storeKey] ?? 1))
 }
 
 /** Gera sempre a mesma história para a mesma data de referência. */
@@ -85,59 +125,103 @@ export function buildProductionTestFixture(referenceDate: Date) {
   for (let monthIndex = 0; monthIndex < 12; monthIndex += 1) {
     const start = monthStart(referenceDate, monthIndex - 11)
     const isCurrentMonth = monthIndex === 11
-    const days = isCurrentMonth
-      ? [...new Set([currentMonthDay(referenceDate, 3), currentMonthDay(referenceDate, 12), currentMonthDay(referenceDate, 24)])]
-      : [3, 12, 24]
+    const demand = demandProfiles[monthIndex]
     const riceSpike = monthIndex === 10 ? 0.18 : 0
     const coffeeSpike = monthIndex >= 9 ? 0.22 : 0
-
-    const firstItems: TestPurchaseItem[] = [
-      { productKey: 'arroz', quantity: monthIndex === 6 ? 8 : 2, unit: 'kg', unitPrice: gradual(7.8, monthIndex, riceSpike) },
-      { productKey: 'feijao', quantity: monthIndex === 5 ? 2 : 1, unit: 'kg', unitPrice: gradual(8.4, monthIndex) },
+    const stockStore = monthIndex % 3 === 0 ? 'central' : monthIndex % 3 === 1 ? 'aurora' : 'economico'
+    const freshStore = monthIndex % 2 === 0 ? 'feira' : 'aurora'
+    const mainStore = monthIndex % 2 === 0 ? 'central' : 'economico'
+    const stockItems: TestPurchaseItem[] = [
+      { productKey: 'arroz', quantity: monthIndex === 6 ? 10 : quantity(4, demand), unit: 'kg', unitPrice: priced(7.8, monthIndex, stockStore, riceSpike) },
+      { productKey: 'feijao', quantity: quantity(3, demand), unit: 'kg', unitPrice: priced(8.4, monthIndex, stockStore) },
       monthIndex % 2 === 0
-        ? { productKey: 'cafe', quantity: 500, unit: 'g', unitPrice: gradual(0.04, monthIndex, coffeeSpike) }
-        : { productKey: 'cafe', quantity: 0.5, unit: 'kg', unitPrice: gradual(40, monthIndex, coffeeSpike) },
-      monthIndex % 3 === 0
-        ? { productKey: 'azeite', quantity: 500, unit: 'ml', unitPrice: gradual(0.08, monthIndex) }
-        : { productKey: 'azeite', quantity: 0.5, unit: 'L', unitPrice: gradual(80, monthIndex) },
+        ? { productKey: 'cafe', quantity: 1000, unit: 'g', unitPrice: priced(0.04, monthIndex, stockStore, coffeeSpike) }
+        : { productKey: 'cafe', quantity: 1, unit: 'kg', unitPrice: priced(40, monthIndex, stockStore, coffeeSpike) },
+      { productKey: 'leite', quantity: quantity(10, demand, true), unit: 'L', unitPrice: priced(4.8, monthIndex, stockStore) },
+      { productKey: 'macarrao', quantity: quantity(4, demand, true), unit: 'pct', unitPrice: priced(5.6, monthIndex, stockStore) },
+      { productKey: 'molho', quantity: quantity(4, demand, true), unit: 'un', unitPrice: priced(4.2, monthIndex, stockStore) },
+      { productKey: 'farinha', quantity: quantity(2, demand), unit: 'kg', unitPrice: priced(5.4, monthIndex, stockStore) },
+      { productKey: 'acucar', quantity: quantity(2, demand), unit: 'kg', unitPrice: priced(4.9, monthIndex, stockStore) },
+      { productKey: 'detergente', quantity: quantity(4, demand, true), unit: 'un', unitPrice: priced(2.7, monthIndex, stockStore) },
+      { productKey: 'sabonete', quantity: quantity(6, demand, true), unit: 'un', unitPrice: priced(3.2, monthIndex, stockStore) },
+      { productKey: 'creme_dental', quantity: 2, unit: 'un', unitPrice: priced(8.5, monthIndex, stockStore) },
     ]
-    if (monthIndex % 2 === 0) firstItems.push({ productKey: 'detergente', quantity: 2, unit: 'un', unitPrice: gradual(2.6, monthIndex) })
-    if (monthIndex % 3 === 0) firstItems.push({ productKey: 'papel', quantity: 2, unit: 'pct', unitPrice: gradual(18, monthIndex) })
-    if (start.getUTCMonth() === 11) firstItems.push({ productKey: 'panetone', quantity: 1, unit: 'un', unitPrice: 29.9 })
-
-    const secondItems: TestPurchaseItem[] = [
-      { productKey: 'ovos', quantity: 2, unit: 'dz', unitPrice: gradual(10.5, monthIndex) },
-      { productKey: 'banana', quantity: 2, unit: 'kg', unitPrice: gradual(5.5, monthIndex) },
-    ]
-    if (monthIndex !== 7) secondItems.push({ productKey: 'leite', quantity: 4, unit: 'L', unitPrice: gradual(4.7, monthIndex) })
-    if (monthIndex < 8) secondItems.push({ productKey: 'iogurte', quantity: 4, unit: 'un', unitPrice: gradual(2.8, monthIndex) })
-    if (monthIndex >= 8) secondItems.push({ productKey: 'granola', quantity: 0.5, unit: 'kg', unitPrice: gradual(28, monthIndex) })
-    if (monthIndex === 9) secondItems.push({ productKey: 'arroz', quantity: 2, unit: 'kg', unitPrice: gradual(7.8, monthIndex) })
-
-    const thirdItems: TestPurchaseItem[] = [
-      { productKey: 'frango', quantity: monthIndex === 4 ? 4 : 2, unit: 'kg', unitPrice: gradual(17.5, monthIndex) },
-      { productKey: 'banana', quantity: 1.5, unit: 'kg', unitPrice: gradual(5.5, monthIndex) },
-    ]
-    if (monthIndex !== 7) thirdItems.push({ productKey: 'leite', quantity: 4, unit: 'L', unitPrice: gradual(4.7, monthIndex) })
-    if (monthIndex % 2 === 0) thirdItems.push({ productKey: 'shampoo', quantity: 500, unit: 'ml', unitPrice: gradual(0.04, monthIndex) })
-    if (monthIndex % 2 === 0) {
-      thirdItems.push(monthIndex === 8
-        ? { productKey: 'desinfetante', quantity: 2, unit: 'kg', unitPrice: 8.5, needsReview: true }
-        : { productKey: 'desinfetante', quantity: 2, unit: 'L', unitPrice: gradual(8.5, monthIndex) })
+    if (monthIndex % 2 === 0 || monthIndex === 6) {
+      stockItems.push(
+        { productKey: 'sabao', quantity: monthIndex === 6 ? 6 : 3, unit: 'L', unitPrice: priced(14.5, monthIndex, stockStore) },
+        { productKey: 'amaciante', quantity: monthIndex === 6 ? 4 : 2, unit: 'L', unitPrice: priced(8.9, monthIndex, stockStore) },
+        { productKey: 'papel', quantity: monthIndex === 6 ? 4 : 2, unit: 'pct', unitPrice: priced(21.5, monthIndex, stockStore) },
+      )
     }
-    if (monthIndex === 2 || monthIndex === 9) thirdItems.push({ productKey: 'analgesico', quantity: 1, unit: 'cx', unitPrice: gradual(14, monthIndex) })
-    if (monthIndex === 6) thirdItems.push({ productKey: 'fone', quantity: 1, unit: 'un', unitPrice: 89.9 })
+    if (monthIndex % 2 === 1) stockItems.push({ productKey: 'azeite', quantity: 500, unit: 'ml', unitPrice: priced(0.08, monthIndex, stockStore) })
+    else stockItems.push({ productKey: 'azeite', quantity: 0.5, unit: 'L', unitPrice: priced(80, monthIndex, stockStore) })
+    if (start.getUTCMonth() === 11) stockItems.push({ productKey: 'panetone', quantity: 2, unit: 'un', unitPrice: 32.9 })
 
-    const baskets = [firstItems, secondItems, thirdItems]
-    days.forEach((day, basketIndex) => {
-      const items = baskets[basketIndex]
-      if (!items?.length) return
-      purchases.push({
-        date: purchaseDate(start, day),
-        storeKey: TEST_STORES[(monthIndex + basketIndex) % TEST_STORES.length].key,
-        items,
-      })
-    })
+    const freshItems: TestPurchaseItem[] = [
+      { productKey: 'ovos', quantity: quantity(2, demand, true), unit: 'dz', unitPrice: priced(11.5, monthIndex, freshStore) },
+      { productKey: 'banana', quantity: quantity(3, demand), unit: 'kg', unitPrice: priced(5.8, monthIndex, freshStore) },
+      { productKey: 'maca', quantity: quantity(2, demand), unit: 'kg', unitPrice: priced(9.8, monthIndex, freshStore) },
+      { productKey: 'tomate', quantity: quantity(2, demand), unit: 'kg', unitPrice: priced(8.5, monthIndex, freshStore) },
+      { productKey: 'batata', quantity: quantity(2, demand), unit: 'kg', unitPrice: priced(6.7, monthIndex, freshStore) },
+      { productKey: 'alface', quantity: quantity(2, demand, true), unit: 'un', unitPrice: priced(4.8, monthIndex, freshStore) },
+      { productKey: 'frango', quantity: quantity(2.5, demand), unit: 'kg', unitPrice: priced(18.5, monthIndex, freshStore) },
+      { productKey: 'pao', quantity: quantity(1.2, demand), unit: 'kg', unitPrice: priced(17.5, monthIndex, 'padaria') },
+      monthIndex % 3 === 0
+        ? { productKey: 'queijo', quantity: 500, unit: 'g', unitPrice: priced(0.052, monthIndex, freshStore), matchConfidence: 0.82 }
+        : { productKey: 'queijo', quantity: 0.5, unit: 'kg', unitPrice: priced(52, monthIndex, freshStore) },
+    ]
+    if (monthIndex !== 7) freshItems.push({ productKey: 'leite', quantity: quantity(5, demand, true), unit: 'L', unitPrice: priced(4.9, monthIndex, freshStore) })
+    if (monthIndex < 9) freshItems.push({ productKey: 'iogurte', quantity: quantity(6, demand, true), unit: 'un', unitPrice: priced(3.4, monthIndex, freshStore) })
+    if (monthIndex >= 8) freshItems.push({ productKey: 'granola', quantity: 0.5, unit: 'kg', unitPrice: priced(30, monthIndex, freshStore) })
+
+    const mainItems: TestPurchaseItem[] = [
+      { productKey: 'carne', quantity: quantity(2, demand), unit: 'kg', unitPrice: priced(39.5, monthIndex, mainStore) },
+      { productKey: 'porco', quantity: quantity(1.3, demand), unit: 'kg', unitPrice: priced(25.5, monthIndex, mainStore) },
+      { productKey: 'frango', quantity: quantity(monthIndex === 4 ? 3.5 : 2, demand), unit: 'kg', unitPrice: priced(18.5, monthIndex, mainStore) },
+      { productKey: 'ovos', quantity: 2, unit: 'dz', unitPrice: priced(11.5, monthIndex, mainStore) },
+      { productKey: 'banana', quantity: quantity(2, demand), unit: 'kg', unitPrice: priced(5.8, monthIndex, mainStore) },
+      { productKey: 'tomate', quantity: quantity(1.5, demand), unit: 'kg', unitPrice: priced(8.5, monthIndex, mainStore) },
+      { productKey: 'pao', quantity: quantity(1, demand), unit: 'kg', unitPrice: priced(17.5, monthIndex, 'padaria') },
+      { productKey: 'suco', quantity: quantity(4, demand, true), unit: 'L', unitPrice: priced(8.2, monthIndex, mainStore) },
+      { productKey: 'biscoito', quantity: quantity(3, demand, true), unit: 'pct', unitPrice: priced(6.8, monthIndex, mainStore) },
+    ]
+    if (monthIndex !== 7) mainItems.push({ productKey: 'leite', quantity: quantity(5, demand, true), unit: 'L', unitPrice: priced(4.9, monthIndex, mainStore) })
+    if (monthIndex % 2 === 0) mainItems.push({ productKey: 'shampoo', quantity: 500, unit: 'ml', unitPrice: priced(0.044, monthIndex, 'farmacia') })
+    if (monthIndex % 2 === 0) {
+      mainItems.push(monthIndex === 8
+        ? { productKey: 'desinfetante', quantity: 2, unit: 'kg', unitPrice: 9.5, matchConfidence: 0.55, needsReview: true }
+        : { productKey: 'desinfetante', quantity: 2, unit: 'L', unitPrice: priced(9.5, monthIndex, mainStore) })
+    }
+    if (monthIndex === 2 || monthIndex === 9) mainItems.push({ productKey: 'analgesico', quantity: 1, unit: 'cx', unitPrice: priced(18, monthIndex, 'farmacia') })
+    if (monthIndex === 6) mainItems.push({ productKey: 'fone', quantity: 1, unit: 'un', unitPrice: 119.9 })
+
+    const topUpItems: TestPurchaseItem[] = [
+      { productKey: 'leite', quantity: quantity(5, demand, true), unit: 'L', unitPrice: priced(5.05, monthIndex, 'aurora') },
+      { productKey: 'ovos', quantity: 1, unit: 'dz', unitPrice: priced(11.8, monthIndex, 'aurora') },
+      { productKey: 'banana', quantity: quantity(2, demand), unit: 'kg', unitPrice: priced(6, monthIndex, freshStore) },
+      { productKey: 'maca', quantity: quantity(1.5, demand), unit: 'kg', unitPrice: priced(10, monthIndex, freshStore) },
+      { productKey: 'tomate', quantity: quantity(1.2, demand), unit: 'kg', unitPrice: priced(8.8, monthIndex, freshStore) },
+      { productKey: 'alface', quantity: 1, unit: 'un', unitPrice: priced(5, monthIndex, freshStore) },
+      { productKey: 'pao', quantity: quantity(1.1, demand), unit: 'kg', unitPrice: priced(17.8, monthIndex, 'padaria') },
+      { productKey: 'iogurte', quantity: quantity(4, demand, true), unit: 'un', unitPrice: priced(3.5, monthIndex, 'aurora') },
+    ]
+
+    const preferredDays = monthIndex === 4 ? [1, 8, 16, 24] : monthIndex === 8 ? [1, 12, 21, 28] : [1, 10, 18, 26]
+    let schedule = [
+      { day: preferredDays[0], storeKey: stockStore, items: stockItems },
+      { day: preferredDays[1], storeKey: freshStore, items: freshItems },
+      { day: preferredDays[2], storeKey: mainStore, items: mainItems },
+      { day: preferredDays[3], storeKey: 'padaria', items: topUpItems },
+    ]
+    if (monthIndex === 3) schedule = schedule.slice(0, 3)
+    if (isCurrentMonth) {
+      const throughDay = referenceDate.getUTCDate()
+      schedule = schedule.filter((entry) => entry.day <= throughDay)
+      if (!schedule.length) schedule = [{ day: currentMonthDay(referenceDate, 3), storeKey: stockStore, items: stockItems }]
+    }
+    for (const entry of schedule) {
+      purchases.push({ date: purchaseDate(start, entry.day), storeKey: entry.storeKey, items: entry.items })
+    }
   }
 
   return {

@@ -77,8 +77,8 @@ export async function getClassificationDashboard(
 ) {
   const comparisonWindow = flowComparisonWindow(year, month, asOf)
   const historyDates = Array.from(
-    { length: 6 },
-    (_value, index) => new Date(Date.UTC(year, month - 6 + index, 1)),
+    { length: 12 },
+    (_value, index) => new Date(Date.UTC(year, month - 12 + index, 1)),
   )
   const rangeStart = historyDates[0] < comparisonWindow.referenceStart
     ? historyDates[0]

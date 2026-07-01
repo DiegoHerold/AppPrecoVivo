@@ -45,19 +45,25 @@ function HistoryChart({ data, color }: { data: DashboardDto; color: string }) {
     ...data.history.map((item) => item.totalSpent),
     ...data.history.map((item) => item.estimatedConsumption),
   )
+  const completeMonths = data.history.filter((item) => !item.partial && item.totalSpent > 0)
+  const monthlyAverage = completeMonths.length
+    ? completeMonths.reduce((sum, item) => sum + item.totalSpent, 0) / completeMonths.length
+    : 0
   return <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="text-lg font-bold text-slate-950">Evolução do fluxo</h2><p className="mt-1 text-sm leading-6 text-slate-600">Desembolso real e parcela mensal das compras registradas.</p></div>
+      <div><h2 className="text-lg font-bold text-slate-950">Evolução em 12 meses</h2><p className="mt-1 text-sm leading-6 text-slate-600">Desembolso real e parcela mensal das compras registradas.</p>{monthlyAverage > 0 && <p className="mt-2 text-sm font-semibold text-slate-800">Média dos meses completos: {brl(monthlyAverage, 0)}</p>}</div>
       <div className="flex flex-wrap gap-3 text-sm text-slate-600"><span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded" style={{ background: color }} />Desembolso</span><span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded bg-cyan-400" />Parcela mensal</span></div>
     </div>
-    <div className="mt-6 grid h-52 grid-cols-6 items-end gap-2" aria-label="Evolução de desembolso e parcela mensal">
-      {data.history.map((item) => <div key={`${item.year}-${item.month}`} className="flex h-full min-w-0 flex-col items-center justify-end gap-2">
-        <div className="flex h-36 w-full items-end justify-center gap-1">
-          <span className={`w-[38%] min-w-2 rounded-t-md ${item.partial ? 'opacity-60' : ''}`} style={{ height: `${Math.max(item.totalSpent ? 4 : 1, item.totalSpent / maximum * 100)}%`, background: color }} title={`Desembolso: ${brl(item.totalSpent)}`} />
-          <span className={`w-[38%] min-w-2 rounded-t-md bg-cyan-400 ${item.partial ? 'opacity-60' : ''}`} style={{ height: `${Math.max(item.estimatedConsumption ? 4 : 1, item.estimatedConsumption / maximum * 100)}%` }} title={`Parcela mensal: ${brl(item.estimatedConsumption)}`} />
-        </div>
-        <small className="truncate text-sm font-medium capitalize text-slate-600">{item.label}{item.partial ? '*' : ''}</small>
-      </div>)}
+    <div className="mt-6 overflow-x-auto pb-2">
+      <div className="grid h-52 min-w-[760px] items-end gap-2" style={{ gridTemplateColumns: `repeat(${data.history.length}, minmax(44px, 1fr))` }} aria-label="Evolução de desembolso e parcela mensal">
+        {data.history.map((item) => <div key={`${item.year}-${item.month}`} className="flex h-full min-w-0 flex-col items-center justify-end gap-2">
+          <div className="flex h-36 w-full items-end justify-center gap-1">
+            <span className={`w-[38%] min-w-2 rounded-t-md ${item.partial ? 'opacity-60' : ''}`} style={{ height: `${Math.max(item.totalSpent ? 4 : 1, item.totalSpent / maximum * 100)}%`, background: color }} title={`Desembolso: ${brl(item.totalSpent)}`} />
+            <span className={`w-[38%] min-w-2 rounded-t-md bg-cyan-400 ${item.partial ? 'opacity-60' : ''}`} style={{ height: `${Math.max(item.estimatedConsumption ? 4 : 1, item.estimatedConsumption / maximum * 100)}%` }} title={`Parcela mensal: ${brl(item.estimatedConsumption)}`} />
+          </div>
+          <small className="truncate text-sm font-medium capitalize text-slate-600">{item.label}{item.partial ? '*' : ''}</small>
+        </div>)}
+      </div>
     </div>
     {data.comparison.isPartial && <p className="mt-3 text-sm text-slate-500">* Mês em andamento, contabilizado até o dia {data.comparison.throughDay}.</p>}
   </section>
@@ -74,6 +80,10 @@ function ProductImpactList({ data, limit }: { data: DashboardDto; limit?: number
 }
 
 function SummaryView({ data, color }: { data: DashboardDto; color: string }) {
+  const completeMonths = data.history.filter((item) => !item.partial && item.totalSpent > 0)
+  const monthlyAverage = completeMonths.length
+    ? completeMonths.reduce((sum, item) => sum + item.totalSpent, 0) / completeMonths.length
+    : 0
   return <div className="grid gap-5">
     <section className="overflow-hidden rounded-3xl p-6 text-white shadow-lg" style={{ background: `linear-gradient(135deg, ${color}, #312e81)` }}>
       <p className="text-sm font-medium text-white/75">{data.comparison.isPartial ? `Desembolso até o dia ${data.comparison.throughDay}` : 'Desembolso no período'}</p>
@@ -82,8 +92,9 @@ function SummaryView({ data, color }: { data: DashboardDto; color: string }) {
       <p className="mt-4 max-w-xl text-sm leading-6 text-white/85">{data.comparison.label}. {data.variation.principalMessage}</p>
     </section>
 
-    <div className="grid grid-cols-2 gap-3 min-[460px]:grid-cols-3 [&>*:last-child]:col-span-2 min-[460px]:[&>*:last-child]:col-span-1">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <MetricCard label="Período anterior" value={brl(data.previousTotalSpent, 0)} detail={data.comparison.isPartial ? `até o dia ${data.comparison.referenceThroughDay}` : data.previousMonthLabel} />
+      <MetricCard label="Média mensal" value={brl(monthlyAverage, 0)} detail={`${completeMonths.length} meses completos`} tone="violet" />
       <MetricCard label="Parcela mensal" value={brl(data.estimatedConsumption, 0)} detail="amortização das compras" tone="cyan" />
       <MetricCard label="Compras registradas" value={String(data.purchaseCount)} detail="notas ou registros" tone="violet" />
     </div>
@@ -118,7 +129,28 @@ function CategoriesView({ data, selectCategory, color }: { data: DashboardDto; s
 }
 
 function PricesView({ data }: { data: DashboardDto }) {
-  return <div><div className="mb-4"><h2 className="text-xl font-bold text-slate-950">Impacto de preços e quantidades</h2><p className="mt-1 text-sm leading-6 text-slate-600">Preços são normalizados somente quando massa, volume ou contagem são compatíveis.</p></div><ProductImpactList data={data} /></div>
+  const [filter, setFilter] = useState<'all' | 'price' | 'quantity' | 'changes'>('all')
+  const priceEffect = data.variation.components.find((item) => item.type === 'price')?.amount ?? 0
+  const quantityEffect = data.variation.components.find((item) => item.type === 'quantity')?.amount ?? 0
+  const filtered = data.productImpacts.filter((product) => {
+    if (filter === 'price') return Math.abs(product.priceEffect) >= Math.abs(product.quantityEffect) && Math.abs(product.priceEffect) > 0.009
+    if (filter === 'quantity') return Math.abs(product.quantityEffect) > Math.abs(product.priceEffect) && Math.abs(product.quantityEffect) > 0.009
+    if (filter === 'changes') return product.status !== 'changed'
+    return true
+  })
+  const filteredData = { ...data, productImpacts: filtered }
+  const filters = [
+    { id: 'all' as const, label: 'Todos' },
+    { id: 'price' as const, label: 'Preço' },
+    { id: 'quantity' as const, label: 'Quantidade' },
+    { id: 'changes' as const, label: 'Novos e ausentes' },
+  ]
+  return <div>
+    <div className="mb-4"><h2 className="text-xl font-bold text-slate-950">Impacto de preços e quantidades</h2><p className="mt-1 text-sm leading-6 text-slate-600">Preços são normalizados somente quando massa, volume ou contagem são compatíveis.</p></div>
+    <div className="mb-4 grid grid-cols-2 gap-3"><MetricCard label="Efeito de preço" value={signedBrl(priceEffect)} detail="mantendo a quantidade" /><MetricCard label="Efeito de quantidade" value={signedBrl(quantityEffect)} detail="ao preço de referência" tone="cyan" /></div>
+    <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0">{filters.map((item) => <button key={item.id} onClick={() => setFilter(item.id)} className={`min-h-10 shrink-0 rounded-full px-4 text-sm font-bold ${filter === item.id ? 'bg-indigo-600 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}>{item.label}</button>)}</div>
+    <ProductImpactList data={filteredData} />
+  </div>
 }
 
 function StockView({ data }: { data: DashboardDto }) {
@@ -145,7 +177,7 @@ export function FlowScreen({ data, changeMonth, selectCategory, loading }: {
 
     <nav aria-label="Classificação do relatório" className="-mx-4 mb-3 flex gap-2 overflow-x-auto border-b border-slate-100 px-4 py-3 scrollbar-none md:-mx-6 md:px-6"><button onClick={() => selectCategory(null)} className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-semibold ${!selected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}><Home size={15} /> Tudo</button>{data.classification.breadcrumbs.map((item, index) => <button key={item.id} onClick={() => selectCategory(item.id)} className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-semibold ${index === data.classification.breadcrumbs.length - 1 ? 'text-white' : 'bg-slate-100 text-slate-600'}`} style={index === data.classification.breadcrumbs.length - 1 ? { background: item.color } : undefined}><span>{item.icon}</span>{item.name}</button>)}</nav>
 
-    <div className="-mx-4 mb-5 flex gap-2 overflow-x-auto px-4 py-2 scrollbar-none md:-mx-6 md:px-6" role="tablist">{views.map((item) => <button key={item.id} role="tab" aria-selected={view === item.id} onClick={() => setView(item.id)} className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold ${view === item.id ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}>{item.icon}{item.label}</button>)}</div>
+    <div className="-mx-4 mb-5 grid grid-cols-4 gap-2 px-4 py-2 md:-mx-6 md:px-6" role="tablist">{views.map((item) => <button key={item.id} role="tab" aria-selected={view === item.id} onClick={() => setView(item.id)} className={`inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl px-2 text-xs font-bold min-[430px]:text-sm ${view === item.id ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}><span className="hidden min-[430px]:inline-flex">{item.icon}</span>{item.label}</button>)}</div>
 
     {view === 'summary' && <SummaryView data={data} color={color} />}
     {view === 'categories' && <CategoriesView data={data} selectCategory={selectCategory} color={color} />}
